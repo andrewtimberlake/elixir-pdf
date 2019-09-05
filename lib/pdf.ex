@@ -55,6 +55,16 @@ defmodule Pdf do
     do: {:reply, self(), %{state | document: Document.add_image(document, {x, y}, image_path)}}
   )
 
+  defcall set_color(color, _from, %State{document: document} = state) do
+    document = Document.set_color(document, :stroke, color)
+    {:reply, self(), %{state | document: document}}
+  end
+
+  defcall set_color(stroke_or_non_stroke, color, _from, %State{document: document} = state) do
+    document = Document.set_color(document, stroke_or_non_stroke, color)
+    {:reply, self(), %{state | document: document}}
+  end
+
   @doc """
   Sets the author in the PDF information section.
   """

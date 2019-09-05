@@ -33,6 +33,7 @@ defmodule PdfTest do
     |> Pdf.set_font("Verdana-Bold", 28)
     |> Pdf.text_at({120.070, 762.653}, "External fonts work")
     |> Pdf.set_font("Helvetica", 28)
+    |> Pdf.set_color(Pdf.Color.RGB.red())
     |> Pdf.text_at({200, 230}, "Back to Helvetica")
     |> Pdf.write_to(file_path)
     |> Pdf.delete()

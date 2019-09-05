@@ -74,6 +74,10 @@ defmodule Pdf.Document do
     %{document | current: Page.text_lines(page, {x, y}, lines)}
   end
 
+  def set_color(%__MODULE__{current: page} = document, stroke_or_non_stroke, color) do
+    %{document | current: Page.set_color(page, stroke_or_non_stroke, color)}
+  end
+
   def add_image(%__MODULE__{current: page} = document, {x, y}, image_path) do
     document = create_image(document, image_path)
     image = document.images[image_path]

@@ -2,7 +2,7 @@ defmodule Pdf.Page do
   defstruct size: :a4, stream: nil
 
   import Pdf.Utils
-  alias Pdf.{Image, Stream}
+  alias Pdf.{Image, Stream, Color}
 
   def new(opts \\ [size: :a4]), do: init(opts, %__MODULE__{stream: Stream.new()})
 
@@ -40,6 +40,14 @@ defmodule Pdf.Page do
 
   def draw_lines(page, [line | tail]) do
     draw_lines(push(page, [s(line), "Tj", "T*"]), tail)
+  end
+
+  def set_color(page, :stroke, color) do
+    push(page, Color.new("rg", color))
+  end
+
+  def set_color(page, :nonstroke, color) do
+    push(page, Color.new("RG", color))
   end
 
   def add_image(page, {x, y}, %{name: image_name, image: %Image{width: width, height: height}}) do
