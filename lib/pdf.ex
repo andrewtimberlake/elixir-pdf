@@ -51,6 +51,13 @@ defmodule Pdf do
   end
 
   defcall(
+    add_image({x, y}, image_path, options, _from, %State{document: document} = state),
+    do:
+      {:reply, self(),
+       %{state | document: Document.add_image(document, {x, y}, image_path, options)}}
+  )
+
+  defcall(
     add_image({x, y}, image_path, _from, %State{document: document} = state),
     do: {:reply, self(), %{state | document: Document.add_image(document, {x, y}, image_path)}}
   )

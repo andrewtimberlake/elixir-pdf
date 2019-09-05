@@ -78,10 +78,17 @@ defmodule Pdf.Document do
     %{document | current: Page.set_color(page, stroke_or_non_stroke, color)}
   end
 
-  def add_image(%__MODULE__{current: page} = document, {x, y}, image_path) do
+  def add_image(%__MODULE__{current: page} = document, {x, y}, image_path, options \\ []) do
     document = create_image(document, image_path)
     image = document.images[image_path]
-    %{document | current: Page.add_image(page, {x, y}, image)}
+    width = Keyword.get(options, :width, image.image.width)
+    height = Keyword.get(options, :height, image.image.height)
+    img = %{image.image | width: width, height: height}
+
+    %{
+      document
+      | current: Page.add_image(page, {x, y}, %{image | image: img})
+    }
   end
 
   def rectangle(%__MODULE__{current: page} = document, coords) do

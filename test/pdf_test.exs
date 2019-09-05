@@ -26,7 +26,7 @@ defmodule PdfTest do
       "Second line",
       "Third line"
     ])
-    |> Pdf.add_image({25, 50}, fixture("rgb.jpg"))
+    |> Pdf.add_image({25, 50}, fixture("rgb.jpg"), width: 54.0, height: 54.0)
     |> Pdf.add_image({175, 50}, fixture("cmyk.jpg"))
     |> Pdf.add_image({325, 50}, fixture("grayscale.jpg"))
     |> Pdf.add_font("test/fonts/Verdana-Bold.afm")
