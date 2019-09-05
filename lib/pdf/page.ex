@@ -58,6 +58,21 @@ defmodule Pdf.Page do
     |> push("Q")
   end
 
+  def rectangle(page, {x, y, w, h}) do
+    page
+    |> push([x, y, w, h, "re"])
+  end
+
+  def stroke(page) do
+    page
+    |> push("S")
+  end
+
+  def set_line_width(page, size) do
+    page
+    |> push([size, "w"])
+  end
+
   defimpl Pdf.Size do
     def size_of(%Pdf.Page{} = page), do: Pdf.Size.size_of(page.stream)
   end

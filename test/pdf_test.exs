@@ -35,6 +35,10 @@ defmodule PdfTest do
     |> Pdf.set_font("Helvetica", 28)
     |> Pdf.set_color(Pdf.Color.RGB.red())
     |> Pdf.text_at({200, 230}, "Back to Helvetica")
+    |> Pdf.set_color(:nonstroke, Pdf.Color.RGB.silver())
+    |> Pdf.set_line_width(0.5)
+    |> Pdf.rectangle(50, 750, 450, 45)
+    |> Pdf.stroke()
     |> Pdf.write_to(file_path)
     |> Pdf.delete()
 

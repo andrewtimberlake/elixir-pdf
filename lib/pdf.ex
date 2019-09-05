@@ -65,6 +65,21 @@ defmodule Pdf do
     {:reply, self(), %{state | document: document}}
   end
 
+  defcall rectangle(x, y, w, h, _from, %State{document: document} = state) do
+    document = Document.rectangle(document, {x, y, w, h})
+    {:reply, self(), %{state | document: document}}
+  end
+
+  defcall stroke(_from, %State{document: document} = state) do
+    document = Document.stroke(document)
+    {:reply, self(), %{state | document: document}}
+  end
+
+  defcall set_line_width(size, _from, %State{document: document} = state) do
+    document = Document.set_line_width(document, size)
+    {:reply, self(), %{state | document: document}}
+  end
+
   @doc """
   Sets the author in the PDF information section.
   """

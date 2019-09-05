@@ -84,6 +84,18 @@ defmodule Pdf.Document do
     %{document | current: Page.add_image(page, {x, y}, image)}
   end
 
+  def rectangle(%__MODULE__{current: page} = document, coords) do
+    %{document | current: Page.rectangle(page, coords)}
+  end
+
+  def stroke(%__MODULE__{current: page} = document) do
+    %{document | current: Page.stroke(page)}
+  end
+
+  def set_line_width(%__MODULE__{current: page} = document, size) do
+    %{document | current: Page.set_line_width(page, size)}
+  end
+
   defp create_image(%{objects: objects, images: images} = document, image_path) do
     images =
       Map.put_new_lazy(images, image_path, fn ->
