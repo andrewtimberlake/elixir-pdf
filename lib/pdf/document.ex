@@ -95,6 +95,10 @@ defmodule Pdf.Document do
     %{document | current: Page.rectangle(page, coords)}
   end
 
+  def line(%__MODULE__{current: page} = document, coords) do
+    %{document | current: Page.line(page, coords)}
+  end
+
   def stroke(%__MODULE__{current: page} = document) do
     %{document | current: Page.stroke(page)}
   end

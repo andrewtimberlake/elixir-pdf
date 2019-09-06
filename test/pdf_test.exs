@@ -39,6 +39,9 @@ defmodule PdfTest do
     |> Pdf.set_line_width(0.5)
     |> Pdf.rectangle(50, 750, 450, 45)
     |> Pdf.stroke()
+    |> Pdf.set_color(:nonstroke, Pdf.Color.RGB.darkred())
+    |> Pdf.line(50, 750, 250, 250)
+    |> Pdf.stroke()
     |> Pdf.write_to(file_path)
     |> Pdf.delete()
 

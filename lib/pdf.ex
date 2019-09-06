@@ -77,6 +77,11 @@ defmodule Pdf do
     {:reply, self(), %{state | document: document}}
   end
 
+  defcall line(x, y, x2, y2, _from, %State{document: document} = state) do
+    document = Document.line(document, {x, y, x2, y2})
+    {:reply, self(), %{state | document: document}}
+  end
+
   defcall stroke(_from, %State{document: document} = state) do
     document = Document.stroke(document)
     {:reply, self(), %{state | document: document}}

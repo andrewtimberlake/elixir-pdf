@@ -63,6 +63,12 @@ defmodule Pdf.Page do
     |> push([x, y, w, h, "re"])
   end
 
+  def line(page, {x, y, x2, y2}) do
+    page
+    |> push([x, y, "m"])
+    |> push([x2, y2, "l"])
+  end
+
   def stroke(page) do
     page
     |> push("S")
