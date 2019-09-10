@@ -32,6 +32,7 @@ defmodule PdfTest do
     |> Pdf.add_font("test/fonts/Verdana-Bold.afm")
     |> Pdf.set_font("Verdana-Bold", 28)
     |> Pdf.text_at({120.070, 762.653}, "External fonts work")
+    |> Pdf.text_at({120.070, 732.653}, "Underlining fonts work", underline: true)
     |> Pdf.set_font("Helvetica", 28)
     |> Pdf.set_color(Pdf.Color.RGB.red())
     |> Pdf.text_at({200, 230}, "Back to Helvetica")

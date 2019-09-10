@@ -45,6 +45,11 @@ defmodule Pdf do
     {:reply, self(), %{state | document: document}}
   end
 
+  defcall text_at({x, y}, text, options, _from, %State{document: document} = state) do
+    document = Document.text_at(document, {x, y}, text, options)
+    {:reply, self(), %{state | document: document}}
+  end
+
   defcall text_lines({x, y}, [_ | _] = lines, _from, %State{document: document} = state) do
     document = Document.text_lines(document, {x, y}, lines)
     {:reply, self(), %{state | document: document}}

@@ -1,5 +1,14 @@
 defmodule Pdf.Document do
-  defstruct objects: nil, info: nil, fonts: %{}, current: nil, pages: [], opts: [], images: %{}
+  defstruct objects: nil,
+            info: nil,
+            fonts: %{},
+            current: nil,
+            pages: [],
+            opts: [],
+            images: %{},
+            current_font: nil,
+            current_font_size: 8
+
   import Pdf.Utils
 
   alias Pdf.{
@@ -63,7 +72,24 @@ defmodule Pdf.Document do
   def set_font(%__MODULE__{current: page} = document, font_name, font_size) do
     document = add_font(document, font_name)
     page = Page.set_font(page, document, font_name, font_size)
-    %{document | current: page}
+    %{document | current: page, current_font_size: font_size}
+  end
+
+  def text_at(%__MODULE__{current: page} = document, {x, y}, text, options) do
+    if Keyword.get(options, :underline, false) do
+      text_width =
+        Pdf.Util.Text.text_width(document.current_font.font, text, document.current_font_size)
+
+      page =
+        document.current
+        |> Page.text_at({x, y}, text)
+        |> Page.line({x, y - 1, x + text_width, y - 1})
+        |> Page.stroke()
+
+      %{document | current: page}
+    else
+      %{document | current: Page.text_at(page, {x, y}, text)}
+    end
   end
 
   def text_at(%__MODULE__{current: page} = document, {x, y}, text) do
@@ -120,7 +146,9 @@ defmodule Pdf.Document do
   end
 
   def add_font(document, name) do
-    unless document.fonts[name] do
+    font = document.fonts[name]
+
+    unless font do
       font_module = Font.lookup(name)
       id = Kernel.map_size(document.fonts) + 1
       # I don't need to do this at this point, it can be done when exporting, like the pages
@@ -130,9 +158,9 @@ defmodule Pdf.Document do
       fonts =
         Map.put(document.fonts, name, %{name: n("F#{id}"), font: font_module, object: font_object})
 
-      %{document | fonts: fonts}
+      %{document | fonts: fonts, current_font: font_module}
     else
-      document
+      %{document | current_font: font}
     end
   end
 

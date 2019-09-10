@@ -71,6 +71,35 @@ defmodule Pdf.ExternalFont do
     |> Dictionary.put("Length", part1 + part2 + part3)
   end
 
+  def width(font, <<utf8_char::integer>>) do
+    Enum.at(font.metrics.widths, utf8_char)
+  end
+
+  def width(font, "€") do
+    Enum.at(font.metrics.widths, 128)
+  end
+
+  def width(font, _) do
+    Enum.at(font.metrics.widths, 0)
+  end
+
+  @doc """
+  Returns the width of the string in font units (1/1000 of font scale factor)
+  """
+  def text_width(font, string) do
+    string
+    |> String.codepoints()
+    |> Enum.reduce(0, &(&2 + width(font, &1)))
+  end
+
+  @doc ~S"""
+  Returns the width of a string in points (72 points = 1 inch)
+  """
+  def text_width(font, string, font_size) do
+    width = text_width(font, string)
+    width * font_size / 1000
+  end
+
   def size(%__MODULE__{} = font) do
     # size_of(font.dictionary) + byte_size(font.font_file) + byte_size(@stream_start <> @stream_end)
     byte_size(to_iolist(font) |> Enum.join())
