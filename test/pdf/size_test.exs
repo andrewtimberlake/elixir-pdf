@@ -114,7 +114,8 @@ defmodule Pdf.SizeTest do
 
     test "it returns the correct length for a command" do
       assert Size.size_of({:command, "BT"}) == 2
-      assert Size.size_of({:command, [{:name, "F1"}, 12, "Tf"]}) == 10
+      assert Size.size_of({:command, ["BT"]}) == 2
+      assert Size.size_of({:command, [{:name, "F1"}, 12, "Tf"]}) == 9
     end
   end
 end
