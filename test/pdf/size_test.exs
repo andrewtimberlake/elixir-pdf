@@ -101,6 +101,7 @@ defmodule Pdf.SizeTest do
 
     test "it returns the correct length for a string field" do
       assert Size.size_of({:string, "string"}) == 8
+      assert Size.size_of({:string, 'string'}) == 8
       assert Size.size_of({:string, "a long string"}) == 15
     end
 

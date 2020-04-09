@@ -31,6 +31,9 @@ end
 defimpl Pdf.Size, for: Tuple do
   def size_of({:name, string}), do: 1 + Pdf.Size.size_of(string)
 
+  def size_of({:string, string}) when is_list(string),
+    do: 2 + Pdf.Size.size_of(:binary.list_to_bin(string))
+
   def size_of({:string, string}), do: 2 + Pdf.Size.size_of(string)
 
   def size_of({:object, number, generation}),
