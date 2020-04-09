@@ -48,11 +48,6 @@ defmodule Pdf.Font do
       @doc "The font bbox"
       def bbox, do: unquote(Macro.escape(metrics.bbox))
 
-      {_llx, lly, _urx, ury} = metrics.bbox
-
-      def line_gap,
-        do: unquote(ury - lly - ((metrics.ascender || 0) + (metrics.descender || 0)))
-
       @doc """
       Returns the character widths of characters beginning from `first_char/0`
       """
