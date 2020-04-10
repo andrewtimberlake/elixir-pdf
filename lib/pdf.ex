@@ -3,6 +3,36 @@ defmodule Pdf do
   import Pdf.Util.GenServerMacros
   alias Pdf.Document
 
+  @moduledoc """
+  The missing PDF library for Elixir.
+
+  ## Usage
+
+  ```elixir
+
+    {:ok, pdf} = Pdf.new( size: :a4, compress: true)
+
+      pdf
+      |> Pdf.set_info(title: "Demo PDF")
+      |> Pdf.set_font("Helvetica", 10)
+      |> Pdf.text_at({200,200}, "Welcome to Pdf")
+      |> Pdf.write_to("test".pdf)
+
+    Pdf.delete(pdf)
+  ```
+  """
+
+  @doc """
+  Create a new Pdf process
+
+  The following options can be given:
+
+  :size      |  Page size, defaults to `:a4`
+  :compress  |  Compress the Pdf, default: `true`
+
+
+  """
+  @spec new(any) :: :ignore | {:error, any} | {:ok, pid}
   def new(opts \\ []), do: GenServer.start_link(__MODULE__, opts)
 
   def open(opts \\ [], func) do
@@ -12,25 +42,60 @@ defmodule Pdf do
     :ok
   end
 
+  @doc "Stop the Pdf Process"
   def delete(pdf), do: GenServer.stop(pdf)
 
+  @doc false
   def init(opts), do: {:ok, Document.new(opts)}
 
+  @doc """
+  The unit of measurement in a Pdf are points, where *1 point = 1/72 inch*.
+  This means that a standard A4 page, 8.27 inch, translates to 595 points.
+  """
   def points(x), do: x
+  @doc "Convert the given value from picas to Pdf points"
   def picas(x), do: x * 6
+  @doc "Convert the given value from inches to Pdf points"
   def inches(x), do: round(x * 72.21)
+  @doc "Convert the given value from cm to Pdf points"
   def cm(x), do: round(x * 72.21 / 2.54)
 
+  @doc "Convert the given value from pixels to Pdf points"
   def pixels_to_points(pixels, dpi \\ 300), do: round(pixels / dpi * 72.21)
 
+  @doc "Write the PDF to the given path"
   defcall write_to(path, _from, document) do
     File.write!(path, Document.to_iolist(document))
     {:reply, self(), document}
   end
 
+  @doc """
+  Export the Pdf to a binary representation.
+
+  This is can be used in eg Phoenix to send a PDF to the browser.
+
+  ```elixir
+    report =
+      pdf
+      |> ....
+      |> Pdf.export()
+
+   conn
+    |> put_resp_content_type("application/pdf")
+    |> put_resp_header(
+      "content-disposition",
+      "attachment; filename=\\"document.pdf\\""
+    )
+    |> send_resp(200, csv)
+  ```
+  """
   defcall export(_from, document) do
     {:reply, Document.to_iolist(document) |> :binary.list_to_bin(), document}
   end
+
+  @doc """
+  Add a new page to the Pdf with the given page size.
+  """
 
   defcall add_page(size, _from, document) do
     {:reply, self(), Document.add_page(document, size: size)}
@@ -70,12 +135,23 @@ defmodule Pdf do
     {:reply, self(), Document.set_line_join(document, style)}
   end
 
-  @type x :: integer
-  @type y :: integer
-  @type width :: integer
-  @type height :: integer
+  @typedoc """
+  Most functions take a coordinates tuple, `{x, y}`.
+  In Pdf these start from the bottom-left of the page.
+  """
+  @type coords :: {x, y}
+  @typedoc "Width and height expressed in Pdf points"
+  @type dimension :: {width, height}
+  @typedoc "The x-coordinate"
+  @type x :: number
+  @typedoc "The y-coordinate"
+  @type y :: number
+  @typedoc "The width in points"
+  @type width :: number
+  @typedoc "The height in points"
+  @type height :: number
 
-  @spec rectangle(pid, {x, y}, {width, height}) :: pid
+  @spec rectangle(pid, coords, dimension) :: pid
   defcall rectangle({x, y}, {w, h}, _from, document) do
     {:reply, self(), Document.rectangle(document, {x, y}, {w, h})}
   end
