@@ -45,6 +45,27 @@ defmodule Pdf.ExternalFont do
     widths = Metrics.widths(font_metrics)
     last_char = font_metrics.first_char + length(widths) - 1
 
+    kern_pairs = :ets.new(String.to_atom("#{font_metrics.name}kern"), [:set, :protected])
+    glyphs = :ets.new(String.to_atom("#{font_metrics.name}glyphs"), [:set, :protected])
+
+    for {d1, d2, am} <- font_metrics.kern_pairs do
+      :ets.insert(kern_pairs, {<<d1, d2>>, am})
+    end
+
+    Enum.each(Pdf.Encoding.WinAnsi.characters(), fn
+      {_, nil, nil} ->
+        :skip
+
+      {char_code, _char, name} ->
+        case font_metrics.glyphs[name] do
+          nil ->
+            :skip
+
+          %{width: width} ->
+            :ets.insert(glyphs, {char_code, width})
+        end
+    end)
+
     %__MODULE__{
       name: font_metrics.name,
       font_file: font_file,
@@ -63,8 +84,8 @@ defmodule Pdf.ExternalFont do
       fixed_pitch: font_metrics.fixed_pitch,
       bbox: font_metrics.bbox,
       widths: widths,
-      glyphs: font_metrics.glyphs,
-      kern_pairs: font_metrics.kern_pairs
+      glyphs: glyphs,
+      kern_pairs: kern_pairs
     }
   end
 
@@ -118,38 +139,22 @@ defmodule Pdf.ExternalFont do
     iex> ExternalFont.width(font, "A")
     123
   """
-  def width(font, <<char_code::integer>> = str) when is_binary(str) do
-    width(font, char_code)
-  end
-
   def width(font, char_code) do
-    Pdf.Encoding.WinAnsi.characters()
-    |> Enum.find(fn {_, char, _} -> char == char_code end)
-    |> case do
-      nil ->
-        0
-
-      {_, _, name} ->
-        case font.glyphs[name] do
-          nil ->
-            0
-
-          %{width: width} ->
-            width
-        end
+    case :ets.lookup(font.glyphs, char_code) do
+      [] -> 0
+      [{_, w}] -> w
     end
   end
 
   def kern_text(_font, ""), do: [""]
 
   def kern_text(font, <<first::integer, second::integer, rest::binary>>) do
-    font.kern_pairs
-    |> Enum.find(fn {f, s, _amount} -> f == first && s == second end)
+    :ets.lookup(font.kern_pairs, <<first, second>>)
     |> case do
-      {f, _s, amount} ->
-        [<<f>>, -amount | kern_text(font, <<second::integer, rest::binary>>)]
+      [{_, amount}] ->
+        [<<first>>, -amount | kern_text(font, <<second::integer, rest::binary>>)]
 
-      nil ->
+      [] ->
         [head | tail] = kern_text(font, <<second::integer, rest::binary>>)
         [<<first::integer, head::binary>> | tail]
     end
