@@ -244,7 +244,7 @@ defmodule Pdf.Page do
         height = Enum.max([leading, font_size])
         ascender = font.module.ascender * font_size / 1000
         descender = -(font.module.descender * font_size / 1000)
-        cap_height = font.module.cap_height * font_size / 1000
+        cap_height = (font.module.cap_height || 0) * font_size / 1000
         x_height = (font.module.x_height || 0) * font_size / 1000
         line_gap = (font_size - (ascender + descender)) / 2
 
