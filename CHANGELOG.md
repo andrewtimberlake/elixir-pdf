@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.1 (2023-01-19)
+
+- Fix bug with zero width strings and empty rows (also fixes [#24])
+- Fix issue with nil cap height [#35]
+- Raise RuntimeError when attempting to add text without a font [#36]
+- Fix typespec for `text_wrap/5` [#37]
 
 ## 0.6.0 (2021-12-07)
 

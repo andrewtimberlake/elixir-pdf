@@ -7,7 +7,6 @@
 [![License](https://img.shields.io/hexpm/l/pdf.svg)](https://github.com/andrewtimberlake/elixir-pdf/blob/master/LICENSE.md)
 [![Last Updated](https://img.shields.io/github/last-commit/andrewtimberlake/elixir-pdf.svg)](https://github.com/andrewtimberlake/elixir-pdf/commits/master)
 
-
 The missing PDF library for Elixir.
 
 ## Usage
@@ -29,7 +28,7 @@ Add `:pdf` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:pdf, "~> 0.3"},
+    {:pdf, "~> 0.6"},
   ]
 end
 ```

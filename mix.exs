@@ -1,7 +1,7 @@
 defmodule Pdf.Mixfile do
   use Mix.Project
 
-  @version "0.6.0"
+  @version "0.6.1"
   @github_url "https://github.com/andrewtimberlake/elixir-pdf"
 
   def project do
@@ -15,7 +15,7 @@ defmodule Pdf.Mixfile do
       deps: deps(),
       docs: docs(),
       package: package(),
-      elixirc_paths: elixirc_paths(Mix.env()),
+      elixirc_paths: elixirc_paths(Mix.env())
     ]
   end
 
