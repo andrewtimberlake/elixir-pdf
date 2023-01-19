@@ -99,7 +99,7 @@ defmodule Pdf.TableTest do
     # Tiny paper so we run out of space quickly
     page = Page.new(size: [100, 100], fonts: fonts, compress: false)
 
-    assert {page,
+    assert {_page,
             {:continue,
              [
                [
@@ -165,8 +165,51 @@ defmodule Pdf.TableTest do
                allow_row_overflow: true
              )
 
-    assert {page, :complete} =
+    assert {_page, :complete} =
              page |> Page.table({10, 90}, {80, 80}, continued_data, allow_row_overflow: true)
+  end
+
+  test "handle empty row generated from trailing whitespace" do
+    {:ok, collection} = ObjectCollection.start_link()
+    {:ok, fonts} = Fonts.start_link(collection)
+    # Tiny paper so we run out of space quickly
+    page = Page.new(size: [100, 100], fonts: fonts, compress: false)
+
+    assert {_page, :complete} =
+             page
+             |> Page.set_font("Helvetica", 12)
+             |> Page.table(
+               {10, 90},
+               {80, 80},
+               [
+                 ["Header 1", "Header 2", "Header 3"],
+                 [
+                   "Col 1",
+                   "Col 2",
+                   #    ↓ the error
+                   "mmmm "
+                 ]
+               ],
+               allow_row_overflow: true
+             )
+  end
+
+  test "Handle empty row error" do
+    {:ok, collection} = ObjectCollection.start_link()
+    {:ok, fonts} = Fonts.start_link(collection)
+    page = Page.new(size: :a4, fonts: fonts, compress: false)
+
+    assert {_page, :complete} =
+             page
+             |> Page.set_font("Helvetica", 12)
+             |> Page.table(
+               {10, 90},
+               {80, 80},
+               [
+                 []
+               ],
+               allow_row_overflow: true
+             )
   end
 
   defp long_content(string, repeats) do

@@ -277,7 +277,7 @@ defmodule Pdf.Table do
       end)
       |> Enum.unzip()
 
-    row_height = Enum.map(row, &col_height/1) |> Enum.max()
+    row_height = Enum.map(row, &col_height/1) |> Enum.max(&>=/2, fn -> 0 end)
 
     cond do
       # We have an overflow
@@ -306,6 +306,10 @@ defmodule Pdf.Table do
   defp overflow_lines(lines, max_height) do
     {lines, overflow} =
       lines
+      |> Enum.reject(fn
+        {:line, []} -> true
+        _ -> false
+      end)
       |> Enum.map_reduce(0, fn {:line, line}, acc ->
         line_height = Enum.max(Enum.map(line, &Keyword.get(elem(&1, 2), :height)))
         {{:line, line, line_height + acc}, line_height + acc}
