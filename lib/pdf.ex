@@ -106,7 +106,6 @@ defmodule Pdf do
   :compress  |  Compress the Pdf, default: `true`
 
   There is no standard font selected when creating a new PDF, so set one with `set_font/3` before adding text.
-
   """
   @spec new(any) :: :ignore | {:error, any} | {:ok, pid}
   def new(opts \\ []), do: GenServer.start_link(__MODULE__, opts)
@@ -206,13 +205,11 @@ defmodule Pdf do
   @doc """
   Add a new page to the Pdf with the given page size.
   """
-
   defcall add_page(size, _from, document) do
     {:reply, self(), Document.add_page(document, size: size)}
   end
 
   @doc "Returns the current page number."
-
   defcall page_number(_from, document) do
     {:reply, Document.page_number(document), document}
   end
@@ -222,7 +219,6 @@ defmodule Pdf do
 
   This takes either a `Pdf.Color.color/1` atom, an RGB tuple or a CMYK tuple.
   """
-
   @spec set_fill_color(pid, color_name | rgb | cmyk) :: pid
   defcall set_fill_color(color, _from, document) do
     {:reply, self(), Document.set_fill_color(document, color)}
@@ -265,7 +261,6 @@ defmodule Pdf do
   @doc """
   Draw a rectangle from coordinates x,y (lower left corner) for a given width and height.
   """
-
   @spec rectangle(pid, coords, dimension) :: pid
   defcall rectangle(coords, dimensions, _from, document) do
     {:reply, self(), Document.rectangle(document, coords, dimensions)}
@@ -282,7 +277,6 @@ defmodule Pdf do
   @doc """
   Move the cursor to the given coordinates.
   """
-
   @spec move_to(pid, coords) :: pid
   defcall move_to(coords, _from, document) do
     {:reply, self(), Document.move_to(document, coords)}
@@ -296,7 +290,6 @@ defmodule Pdf do
     |> Pdf.line_append({200, 200})
   ```
   """
-
   @spec line_append(pid, coords) :: pid
   defcall line_append(coords, _from, document) do
     {:reply, self(), Document.line_append(document, coords)}
@@ -313,7 +306,6 @@ defmodule Pdf do
   @doc """
   Fill the current drawing with the previously set color.
   """
-
   @spec fill(pid) :: pid
   defcall fill(_from, document) do
     {:reply, self(), Document.fill(document)}
@@ -329,7 +321,6 @@ defmodule Pdf do
   `:bold`   | boolean | false
   `:italic` | boolean | false
   """
-
   @spec set_font(pid, binary, integer | list) :: pid
   def set_font(pid, font_name, opts) when is_list(opts) do
     font_size = Keyword.get(opts, :size, 16)
@@ -372,7 +363,6 @@ defmodule Pdf do
 
   You have to `add_font/2` all variants you want to use, bold, italic, ...
   """
-
   defcall add_font(path, _from, document) do
     {:reply, self(), Document.add_external_font(document, path)}
   end
@@ -382,7 +372,6 @@ defmodule Pdf do
 
   Today, leading is often used synonymously with "line height" or "line spacing."
   """
-
   defcall set_text_leading(leading, _from, document) do
     {:reply, self(), Document.set_text_leading(document, leading)}
   end
@@ -407,9 +396,7 @@ defmodule Pdf do
 
   When setting `bold: true` or `italic: true`, make sure that your current font supports these or an error will occur.
   If using an external font, you have to `add_font/2` all variants you want to use.
-
   """
-
   defcall text_at(coords, text, _from, document) do
     {:reply, self(), Document.text_at(document, coords, text)}
   end
@@ -423,9 +410,7 @@ defmodule Pdf do
 
   The `:kerning` option if set to `true` will apply to all rendered text.
   Kerning refers to the spacing between the characters of a font. Without kerning, each character takes up a block of space and the next character is printed after it. When kerning is applied to a font, the characters can vertically overlap. This does not mean that the characters actually touch, but instead it allows part of two characters to take up the same vertical space. Kerning is available in some fonts.
-
   """
-
   defcall text_at(coords, text, opts, _from, document) do
     {:reply, self(), Document.text_at(document, coords, text, opts)}
   end
@@ -459,11 +444,8 @@ defmodule Pdf do
 
   When choosing `:bold` or `:italic`, make sure that your current font supports these or an error will occur.
   If using an external font, you have to `add_font/2` all variants you want to use.
-
-
   """
-
-  @spec text_wrap(pid, coords(), dimension(), binary | list) :: pid
+  @spec text_wrap(pid, coords(), dimension(), binary | list) :: {pid, :complete | term()}
   defcall text_wrap(coords, dimensions, text, _from, document) do
     {document, remaining} = Document.text_wrap(document, coords, dimensions, text)
     {:reply, {self(), remaining}, document}
@@ -507,7 +489,6 @@ defmodule Pdf do
 
   Kerning can be set, see `text_at/4` for more information.
   """
-
   @spec text_lines(pid, coords(), list, keyword) :: pid
   defcall text_lines(coords, lines, opts, _from, document) do
     {:reply, self(), Document.text_lines(document, coords, lines, opts)}
@@ -558,7 +539,6 @@ defmodule Pdf do
   @doc """
   Add an images (PNG, or JPEG only) at the given coordinates.
   """
-
   def add_image(pid, coords, image_path), do: add_image(pid, coords, image_path, [])
 
   @doc """
