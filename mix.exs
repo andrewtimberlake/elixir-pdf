@@ -13,21 +13,9 @@ defmodule Pdf.Mixfile do
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      source_url: @github_url,
+      docs: docs(),
+      package: package(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      docs: fn ->
-        [
-          source_ref: "v#{@version}",
-          canonical: "http://hexdocs.pm/pdf",
-          main: "Pdf",
-          source_url: @github_url,
-          extras: ["extra_doc/Tables.md"],
-          assets: "extra_doc/assets",
-          formatters: ["html"]
-        ]
-      end,
-      description: description(),
-      package: package()
     ]
   end
 
@@ -49,20 +37,31 @@ defmodule Pdf.Mixfile do
     ]
   end
 
-  defp description do
-    """
-    Elixir API for generating PDF documents.
-    """
-  end
-
   defp package do
     [
+      description: "Elixir API for generating PDF documents.",
       maintainers: ["Andrew Timberlake"],
       contributors: ["Andrew Timberlake"],
       licenses: ["MIT"],
-      links: %{"GitHub" => @github_url},
-      # files: ~w(lib priv mix.exs README* readme* LICENSE* license* CHANGELOG* changelog* fonts)
-      files: ~w(lib mix.exs README* fonts)
+      files: ~w(lib mix.exs README* fonts),
+      links: %{"GitHub" => @github_url}
+    ]
+  end
+
+  defp docs do
+    [
+      extras: [
+        "CHANGELOG.md": [],
+        "LICENSE.md": [title: "License"],
+        "README.md": [title: "Overview"],
+        "extra_doc/Tables.md": []
+      ],
+      main: "readme",
+      source_url: @github_url,
+      source_ref: "v#{@version}",
+      canonical: "http://hexdocs.pm/pdf",
+      assets: "extra_doc/assets",
+      formatters: ["html"]
     ]
   end
 end

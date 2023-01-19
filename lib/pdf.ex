@@ -65,7 +65,7 @@ defmodule Pdf do
   """
   @type cmyk :: {float, float, float, float}
   @typedoc """
-  A code specifiying the shape of the endpoints for an open path that is stroked.
+  A code specifying the shape of the endpoints for an open path that is stroked.
 
   - :butt (default)
 
@@ -544,7 +544,7 @@ defmodule Pdf do
   @doc """
   Add an images (PNG, or JPEG only) at the given coordinates.
 
-  You can specift a `:width` and `:height` in the options, the image will then be scaled.
+  You can specify a `:width` and `:height` in the options, the image will then be scaled.
   """
   defcall add_image(coords, image_path, opts, _from, document) do
     {:reply, self(), Document.add_image(document, coords, image_path, opts)}
@@ -611,7 +611,7 @@ defmodule Pdf do
   defcall(set_title(title, _from, state), do: set_info(:title, title, state))
 
   @doc """
-  Set multiple keys in the PDF information setion.
+  Set multiple keys in the PDF information section.
 
   Valid keys
     - `:author`
