@@ -175,6 +175,15 @@ defmodule PdfTest do
     pdf
   end
 
+  test "Failure to set a font" do
+    assert_raise RuntimeError, "No font selected", fn ->
+      Pdf.build([size: :a4, compress: false], fn pdf ->
+        pdf
+        |> Pdf.text_at({10, 400}, "Hello World")
+      end)
+    end
+  end
+
   test "exception is passed through" do
     Pdf.build([size: :a4, compress: false], fn pdf ->
       assert_raise RuntimeError,

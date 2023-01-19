@@ -269,6 +269,11 @@ defmodule Pdf.Page do
     end)
   end
 
+  def annotate_attributed_text(attributed_text, %{current_font: nil}, _overall_opts)
+      when is_list(attributed_text) do
+    raise RuntimeError, "No font selected"
+  end
+
   def annotate_attributed_text(non_string, page, overall_opts) do
     annotate_attributed_text(to_string(non_string), page, overall_opts)
   end
