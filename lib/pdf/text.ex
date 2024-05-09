@@ -74,8 +74,8 @@ defmodule Pdf.Text do
     {Enum.reverse(remove_wrapped_whitespace(acc)), remove_wrapped_whitespace(chunks)}
   end
 
-  defp remove_wrapped_whitespace([{" ", _, _} | tail]), do: tail
-  defp remove_wrapped_whitespace([{"\u200B", _, _} | tail]), do: tail
+  defp remove_wrapped_whitespace([{" ", _, _} | tail]), do: remove_wrapped_whitespace(tail)
+  defp remove_wrapped_whitespace([{"\u200B", _, _} | tail]), do: remove_wrapped_whitespace(tail)
   defp remove_wrapped_whitespace(chunks), do: chunks
 
   def wrap(string, width, font, font_size, opts \\ []) do

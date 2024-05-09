@@ -415,6 +415,21 @@ defmodule Pdf.PageTest do
              ET
              """
     end
+
+    test "bug report #41", %{page: page} do
+      page = Page.set_font(page, "Courier", 7)
+
+      assert {page, :complete} =
+               Page.text_wrap(page, {675, 497.8}, {114, 14}, "xxxxxxxxxxxxxxxxxxxxxxxxxxx  ")
+
+      assert export(page) == """
+             BT
+             /F5 7 Tf
+             675 492.648 Td
+             (xxxxxxxxxxxxxxxxxxxxxxxxxxx) Tj
+             ET
+             """
+    end
   end
 
   describe "text_wrap!/5" do
