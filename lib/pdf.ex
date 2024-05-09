@@ -162,13 +162,24 @@ defmodule Pdf do
   This means that a standard A4 page, 8.27 inch, translates to 595 points.
   """
   def points(x), do: x
+
   @doc "Convert the given value from picas to Pdf points"
+  @spec picas(number()) :: number()
   def picas(x), do: x * 6
+
   @doc "Convert the given value from inches to Pdf points"
+  @spec inches(number()) :: integer()
   def inches(x), do: round(x * 72)
+
   @doc "Convert the given value from cm to Pdf points"
+  @spec cm(number()) :: integer()
   def cm(x), do: round(x * 72 / 2.54)
 
+  @doc "Convert the given value from mm to Pdf points"
+  @spec mm(number()) :: integer()
+  def mm(x), do: round(x * 72 / 2.54 / 10)
+
+  @spec pixels_to_points(pixels :: number(), dpi :: number()) :: integer()
   @doc "Convert the given value from pixels to Pdf points"
   def pixels_to_points(pixels, dpi \\ 300), do: round(pixels / dpi * 72)
 
