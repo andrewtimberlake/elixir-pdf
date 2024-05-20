@@ -470,7 +470,7 @@ defmodule Pdf do
   `:align` | :left , :center , :right | :left
   `:kerning` | `boolean` | false
   """
-  @spec text_wrap(pid, coords(), dimension(), binary | list, keyword) :: pid
+  @spec text_wrap(pid, coords(), dimension(), binary | list, keyword) :: {pid, :complete | term()}
   defcall text_wrap(coords, dimensions, text, opts, _from, document) do
     {document, remaining} = Document.text_wrap(document, coords, dimensions, text, opts)
     {:reply, {self(), remaining}, document}
