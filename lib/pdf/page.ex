@@ -234,7 +234,7 @@ defmodule Pdf.Page do
           if Enum.any?([:bold, :italic], &Keyword.has_key?(opts, &1)) do
             Fonts.get_font(fonts, font, Keyword.take(opts, [:bold, :italic]))
           else
-            Fonts.get_font(fonts, font.name, [])
+            Fonts.get_font(fonts, font.name(), [])
           end
 
         font_size = Keyword.get(opts, :font_size, page.current_font_size)
@@ -464,7 +464,7 @@ defmodule Pdf.Page do
     |> merge_same_opts
     |> Enum.reduce(page, fn {text, _width, opts}, page ->
       page
-      |> set_font(opts[:font].module.name, opts[:font_size], opts)
+      |> set_font(opts[:font].module.name(), opts[:font_size], opts)
       |> set_text_leading(opts[:leading])
       |> set_fill_color(opts[:color])
       |> push(kerned_text(opts[:font].module, text, opts))
