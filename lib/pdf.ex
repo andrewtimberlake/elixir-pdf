@@ -1,6 +1,4 @@
 defmodule Pdf do
-  use GenServer
-  import Pdf.Util.GenServerMacros
   alias Pdf.Document
 
   @moduledoc """
@@ -108,7 +106,7 @@ defmodule Pdf do
   There is no standard font selected when creating a new PDF, so set one with `set_font/3` before adding text.
   """
   @spec new(any) :: :ignore | {:error, any} | {:ok, pid}
-  def new(opts \\ []), do: GenServer.start_link(__MODULE__, opts)
+  def new(opts \\ []), do: GenServer.start_link(__MODULE__.Server, opts)
 
   @doc """
   Builds a PDF document taking care of cleaning up resources on completion.
@@ -139,6 +137,7 @@ defmodule Pdf do
   end
 
   @deprecated "Use build/2 instead"
+  @spec open((any() -> any())) :: any()
   def open(opts \\ [], func) do
     build(opts, func)
   end
@@ -150,12 +149,6 @@ defmodule Pdf do
 
   @deprecated "Use cleanup/1 instead"
   def delete(pid), do: cleanup(pid)
-
-  @doc false
-  def init(opts) do
-    Process.flag(:trap_exit, true)
-    {:ok, Document.new(opts)}
-  end
 
   @doc """
   The unit of measurement in a Pdf are points, where *1 point = 1/72 inch*.
@@ -184,9 +177,9 @@ defmodule Pdf do
   def pixels_to_points(pixels, dpi \\ 300), do: round(pixels / dpi * 72)
 
   @doc "Write the PDF to the given path"
-  defcall write_to(path, _from, document) do
-    File.write!(path, Document.to_iolist(document))
-    {:reply, self(), document}
+  def write_to(pid, path) do
+    :ok = GenServer.call(pid, {:write_to, path})
+    pid
   end
 
   @doc """
@@ -209,20 +202,21 @@ defmodule Pdf do
     |> send_resp(200, report)
   ```
   """
-  defcall export(_from, document) do
-    {:reply, Document.to_iolist(document) |> :binary.list_to_bin(), document}
+  def export(pid) do
+    GenServer.call(pid, :export)
   end
 
   @doc """
   Add a new page to the Pdf with the given page size.
   """
-  defcall add_page(size, _from, document) do
-    {:reply, self(), Document.add_page(document, size: size)}
+  def add_page(pid, size) do
+    :ok = GenServer.call(pid, {:add_page, size})
+    pid
   end
 
   @doc "Returns the current page number."
-  defcall page_number(_from, document) do
-    {:reply, Document.page_number(document), document}
+  def page_number(pid) do
+    GenServer.call(pid, :page_number)
   end
 
   @doc """
@@ -231,8 +225,9 @@ defmodule Pdf do
   This takes either a `Pdf.Color.color/1` atom, an RGB tuple or a CMYK tuple.
   """
   @spec set_fill_color(pid, color_name | rgb | cmyk) :: pid
-  defcall set_fill_color(color, _from, document) do
-    {:reply, self(), Document.set_fill_color(document, color)}
+  def set_fill_color(pid, color) do
+    :ok = GenServer.call(pid, {:set_fill_color, color})
+    pid
   end
 
   @doc """
@@ -241,56 +236,63 @@ defmodule Pdf do
   This takes either a `Pdf.Color.color/1` atom, an RGB tuple or a CMYK tuple.
   """
   @spec set_stroke_color(pid, color_name | rgb | cmyk) :: pid
-  defcall set_stroke_color(color, _from, document) do
-    {:reply, self(), Document.set_stroke_color(document, color)}
+  def set_stroke_color(pid, color) do
+    :ok = GenServer.call(pid, {:set_stroke_color, color})
+    pid
   end
 
   @doc """
   The width to use when drawing lines.
   """
   @spec set_line_width(pid, number) :: pid
-  defcall set_line_width(width, _from, document) do
-    {:reply, self(), Document.set_line_width(document, width)}
+  def set_line_width(pid, width) do
+    :ok = GenServer.call(pid, {:set_line_width, width})
+    pid
   end
 
   @doc """
   The line endings to draw, see `t:cap_style/0`.
   """
   @spec set_line_cap(pid, cap_style) :: pid
-  defcall set_line_cap(style, _from, document) do
-    {:reply, self(), Document.set_line_cap(document, style)}
+  def set_line_cap(pid, style) do
+    :ok = GenServer.call(pid, {:set_line_cap, style})
+    pid
   end
 
   @doc """
   The join style to use where lines meet, see `t:join_style/0`.
   """
   @spec set_line_join(pid, join_style) :: pid
-  defcall set_line_join(style, _from, document) do
-    {:reply, self(), Document.set_line_join(document, style)}
+  def set_line_join(pid, style) do
+    :ok = GenServer.call(pid, {:set_line_join, style})
+    pid
   end
 
   @doc """
   Draw a rectangle from coordinates x,y (lower left corner) for a given width and height.
   """
   @spec rectangle(pid, coords, dimension) :: pid
-  defcall rectangle(coords, dimensions, _from, document) do
-    {:reply, self(), Document.rectangle(document, coords, dimensions)}
+  def rectangle(pid, coords, dimensions) do
+    :ok = GenServer.call(pid, {:rectangle, coords, dimensions})
+    pid
   end
 
   @doc """
   Draw a line between 2 points.
   """
   @spec line(pid, coords, coords) :: pid
-  defcall line(coords, coords_to, _from, document) do
-    {:reply, self(), Document.line(document, coords, coords_to)}
+  def line(pid, coords, coords_to) do
+    :ok = GenServer.call(pid, {:line, coords, coords_to})
+    pid
   end
 
   @doc """
   Move the cursor to the given coordinates.
   """
   @spec move_to(pid, coords) :: pid
-  defcall move_to(coords, _from, document) do
-    {:reply, self(), Document.move_to(document, coords)}
+  def move_to(pid, coords) do
+    :ok = GenServer.call(pid, {:move_to, coords})
+    pid
   end
 
   @doc """
@@ -302,24 +304,27 @@ defmodule Pdf do
   ```
   """
   @spec line_append(pid, coords) :: pid
-  defcall line_append(coords, _from, document) do
-    {:reply, self(), Document.line_append(document, coords)}
+  def line_append(pid, coords) do
+    :ok = GenServer.call(pid, {:line_append, coords})
+    pid
   end
 
   @doc """
   Perform all the previous graphic commands.
   """
   @spec stroke(pid) :: pid
-  defcall stroke(_from, document) do
-    {:reply, self(), Document.stroke(document)}
+  def stroke(pid) do
+    :ok = GenServer.call(pid, :stroke)
+    pid
   end
 
   @doc """
   Fill the current drawing with the previously set color.
   """
   @spec fill(pid) :: pid
-  defcall fill(_from, document) do
-    {:reply, self(), Document.fill(document)}
+  def fill(pid) do
+    :ok = GenServer.call(pid, :fill)
+    pid
   end
 
   @doc """
@@ -343,8 +348,9 @@ defmodule Pdf do
   end
 
   @doc false
-  defcall set_font(font_name, font_size, opts, _from, document) do
-    {:reply, self(), Document.set_font(document, font_name, font_size, opts)}
+  def set_font(pid, font_name, font_size, opts) do
+    :ok = GenServer.call(pid, {:set_font, font_name, font_size, opts})
+    pid
   end
 
   @doc """
@@ -352,8 +358,9 @@ defmodule Pdf do
 
   The font has to have been previously set!
   """
-  defcall set_font_size(size, _from, document) do
-    {:reply, self(), Document.set_font_size(document, size)}
+  def set_font_size(pid, size) do
+    :ok = GenServer.call(pid, {:set_font_size, size})
+    pid
   end
 
   @doc """
@@ -374,8 +381,9 @@ defmodule Pdf do
 
   You have to `add_font/2` all variants you want to use, bold, italic, ...
   """
-  defcall add_font(path, _from, document) do
-    {:reply, self(), Document.add_external_font(document, path)}
+  def add_font(pid, path) do
+    :ok = GenServer.call(pid, {:add_font, path})
+    pid
   end
 
   @doc """
@@ -383,8 +391,9 @@ defmodule Pdf do
 
   Today, leading is often used synonymously with "line height" or "line spacing."
   """
-  defcall set_text_leading(leading, _from, document) do
-    {:reply, self(), Document.set_text_leading(document, leading)}
+  def set_text_leading(pid, leading) do
+    :ok = GenServer.call(pid, {:set_text_leading, leading})
+    pid
   end
 
   @doc """
@@ -408,8 +417,8 @@ defmodule Pdf do
   When setting `bold: true` or `italic: true`, make sure that your current font supports these or an error will occur.
   If using an external font, you have to `add_font/2` all variants you want to use.
   """
-  defcall text_at(coords, text, _from, document) do
-    {:reply, self(), Document.text_at(document, coords, text)}
+  def text_at(pid, coords, text) do
+    text_at(pid, coords, text, [])
   end
 
   @doc """
@@ -422,8 +431,12 @@ defmodule Pdf do
   The `:kerning` option if set to `true` will apply to all rendered text.
   Kerning refers to the spacing between the characters of a font. Without kerning, each character takes up a block of space and the next character is printed after it. When kerning is applied to a font, the characters can vertically overlap. This does not mean that the characters actually touch, but instead it allows part of two characters to take up the same vertical space. Kerning is available in some fonts.
   """
-  defcall text_at(coords, text, opts, _from, document) do
-    {:reply, self(), Document.text_at(document, coords, text, opts)}
+  def text_at(pid, coords, text, opts) do
+    with :ok <- GenServer.call(pid, {:text_at, coords, text, opts}) do
+      pid
+    else
+      {:error, e} -> raise e
+    end
   end
 
   @doc """
@@ -457,9 +470,8 @@ defmodule Pdf do
   If using an external font, you have to `add_font/2` all variants you want to use.
   """
   @spec text_wrap(pid, coords(), dimension(), binary | list) :: {pid, :complete | term()}
-  defcall text_wrap(coords, dimensions, text, _from, document) do
-    {document, remaining} = Document.text_wrap(document, coords, dimensions, text)
-    {:reply, {self(), remaining}, document}
+  def text_wrap(pid, coords, dimensions, text) do
+    text_wrap(pid, coords, dimensions, text, [])
   end
 
   @doc """
@@ -471,27 +483,29 @@ defmodule Pdf do
   `:kerning` | `boolean` | false
   """
   @spec text_wrap(pid, coords(), dimension(), binary | list, keyword) :: pid
-  defcall text_wrap(coords, dimensions, text, opts, _from, document) do
-    {document, remaining} = Document.text_wrap(document, coords, dimensions, text, opts)
-    {:reply, {self(), remaining}, document}
+  def text_wrap(pid, coords, dimensions, text, opts) do
+    result = GenServer.call(pid, {:text_wrap, coords, dimensions, text, opts})
+    {pid, result}
   end
 
   @doc """
   This function has the same options as `text_wrap/4`, but if the text is too large for the box, a `RuntimeError` will be raised.
   """
   @spec text_wrap!(pid, coords(), dimension(), binary | list) :: pid
-  defcall text_wrap!(coords, dimensions, text, _from, document) do
-    document = Document.text_wrap!(document, coords, dimensions, text)
-    {:reply, self(), document}
+  def text_wrap!(pid, coords, dimensions, text) do
+    text_wrap!(pid, coords, dimensions, text, [])
   end
 
   @doc """
   This function has the same options as `text_wrap/5`, but if the text is too large for the box, a `RuntimeError` will be raised.
   """
   @spec text_wrap!(pid, coords(), dimension(), binary | list, keyword) :: pid
-  defcall text_wrap!(coords, dimensions, text, opts, _from, document) do
-    document = Document.text_wrap!(document, coords, dimensions, text, opts)
-    {:reply, self(), document}
+  def text_wrap!(pid, coords, dimensions, text, opts) do
+    with :ok <- GenServer.call(pid, {:text_wrap!, coords, dimensions, text, opts}) do
+      pid
+    else
+      {:error, e} -> raise e
+    end
   end
 
   @doc """
@@ -501,23 +515,12 @@ defmodule Pdf do
   Kerning can be set, see `text_at/4` for more information.
   """
   @spec text_lines(pid, coords(), list, keyword) :: pid
-  defcall text_lines(coords, lines, opts, _from, document) do
-    {:reply, self(), Document.text_lines(document, coords, lines, opts)}
-  end
-
-  @doc """
-  This function draws a number of text lines starting at the given coordinates.
-  The list can overrun the page, no errors or wrapping will occur.
-  """
-  @spec text_lines(pid, coords(), list) :: pid
-  defcall text_lines(coords, lines, _from, document) do
-    {:reply, self(), Document.text_lines(document, coords, lines)}
-  end
-
-  @doc false
-  defcall table(coords, dimensions, data, _from, document) do
-    {document, remaining} = Document.table(document, coords, dimensions, data)
-    {:reply, {self(), remaining}, document}
+  def text_lines(pid, coords, lines, opts \\ []) do
+    with :ok <- GenServer.call(pid, {:text_lines, coords, lines, opts}) do
+      pid
+    else
+      {:error, e} -> raise e
+    end
   end
 
   @doc """
@@ -525,15 +528,9 @@ defmodule Pdf do
 
   See [Tables](tables.html) for more information on how to use tables.
   """
-  defcall table(coords, dimensions, data, opts, _from, document) do
-    {document, remaining} = Document.table(document, coords, dimensions, data, opts)
-    {:reply, {self(), remaining}, document}
-  end
-
-  @doc false
-  defcall table!(coords, dimensions, data, _from, document) do
-    document = Document.table!(document, coords, dimensions, data)
-    {:reply, self(), document}
+  def table(pid, coords, dimensions, data, opts \\ []) do
+    result = GenServer.call(pid, {:table, coords, dimensions, data, opts})
+    {pid, result}
   end
 
   @doc """
@@ -542,9 +539,9 @@ defmodule Pdf do
 
   See [Tables](tables.html) for more information on how to use tables.
   """
-  defcall table!(coords, dimensions, data, opts, _from, document) do
-    document = Document.table!(document, coords, dimensions, data, opts)
-    {:reply, self(), document}
+  def table!(pid, coords, dimensions, data, opts \\ []) do
+    :ok = GenServer.call(pid, {:table!, coords, dimensions, data, opts})
+    pid
   end
 
   @doc """
@@ -557,69 +554,72 @@ defmodule Pdf do
 
   You can specify a `:width` and `:height` in the options, the image will then be scaled.
   """
-  defcall add_image(coords, image_path, opts, _from, document) do
-    {:reply, self(), Document.add_image(document, coords, image_path, opts)}
+  def add_image(pid, coords, image_path, opts) do
+    :ok = GenServer.call(pid, {:add_image, coords, image_path, opts})
+    pid
   end
 
   @doc """
   Returns a `{width, height}` for the current page.
   """
-  defcall size(_from, document) do
-    {:reply, Document.size(document), document}
+  def size(pid) do
+    GenServer.call(pid, :size)
   end
 
   @doc """
   Gets the current cursor position, that is the vertical position.
   """
   @spec cursor(pid) :: number
-  defcall cursor(_from, document) do
-    {:reply, Document.cursor(document), document}
+  def cursor(pid) do
+    GenServer.call(pid, :cursor)
   end
 
   @doc """
   Set the cursor position.
   """
   @spec set_cursor(pid, number) :: pid
-  defcall set_cursor(y, _from, document) do
-    {:reply, self(), Document.set_cursor(document, y)}
+  def set_cursor(pid, y) do
+    :ok = GenServer.call(pid, {:set_cursor, y})
+    pid
   end
 
   @doc """
   Move the cursor `amount` points down.
   """
-  defcall move_down(amount, _from, document) do
-    {:reply, self(), Document.move_down(document, amount)}
+  def move_down(pid, amount) do
+    :ok = GenServer.call(pid, {:move_down, amount})
+    pid
   end
 
   @doc """
   Sets the author in the PDF information section.
   """
-  defcall(set_author(author, _from, state), do: set_info(:author, author, state))
+  def set_author(pid, author), do: set_info(pid, :author, author)
 
   @doc """
   Sets the creator in the PDF information section.
   """
-  defcall(set_creator(creator, _from, state), do: set_info(:creator, creator, state))
+  def set_creator(pid, creator), do: set_info(pid, :creator, creator)
 
   @doc """
   Sets the keywords in the PDF information section.
   """
-  defcall(set_keywords(keywords, _from, state), do: set_info(:keywords, keywords, state))
+  def set_keywords(pid, keywords), do: set_info(pid, :keywords, keywords)
 
   @doc """
   Sets the producer in the PDF information section.
   """
-  defcall(set_producer(producer, _from, state), do: set_info(:producer, producer, state))
+  def set_producer(pid, producer), do: set_info(pid, :producer, producer)
 
   @doc """
   Sets the subject in the PDF information section.
   """
-  defcall(set_subject(subject, _from, state), do: set_info(:subject, subject, state))
+  def set_subject(pid, subject), do: set_info(pid, :subject, subject)
 
   @doc """
   Sets the title in the PDF information section.
   """
-  defcall(set_title(title, _from, state), do: set_info(:title, title, state))
+  def set_title(pid, title), do: set_info(pid, :title, title)
 
   @doc """
   Set multiple keys in the PDF information section.
@@ -637,17 +637,189 @@ defmodule Pdf do
   @typedoc false
   @type info_list :: keyword
   @spec set_info(pid, info_list) :: pid
-  defcall set_info(info_list, _from, document) do
-    {:reply, self(), Document.put_info(document, info_list)}
+  def set_info(pid, info_list) do
+    :ok = GenServer.call(pid, {:set_info, info_list})
+    pid
   end
 
-  defp set_info(key, value, document) do
-    {:reply, self(), Document.put_info(document, key, value)}
+  defp set_info(pid, key, value) do
+    :ok = GenServer.call(pid, {:set_info, key, value})
+    pid
   end
 
   def terminate(_, %{objects: objects, fonts: fonts}) do
     GenServer.stop(objects)
     GenServer.stop(fonts)
     nil
+  end
+
+  defmodule Server do
+    use GenServer
+
+    @impl true
+    def init(opts) do
+      Process.flag(:trap_exit, true)
+      {:ok, Document.new(opts)}
+    end
+
+    @impl true
+    def handle_call({:write_to, path}, _from, document) do
+      File.write!(path, Document.to_iolist(document))
+      {:reply, :ok, document}
+    end
+
+    def handle_call(:export, _from, document) do
+      {:reply, Document.to_iolist(document) |> :binary.list_to_bin(), document}
+    end
+
+    def handle_call({:add_page, size}, _from, document) do
+      {:reply, :ok, Document.add_page(document, size: size)}
+    end
+
+    def handle_call(:page_number, _from, document) do
+      {:reply, Document.page_number(document), document}
+    end
+
+    def handle_call({:set_fill_color, color}, _from, document) do
+      {:reply, :ok, Document.set_fill_color(document, color)}
+    end
+
+    def handle_call({:set_stroke_color, color}, _from, document) do
+      {:reply, :ok, Document.set_stroke_color(document, color)}
+    end
+
+    def handle_call({:set_line_width, width}, _from, document) do
+      {:reply, :ok, Document.set_line_width(document, width)}
+    end
+
+    def handle_call({:set_line_cap, style}, _from, document) do
+      {:reply, :ok, Document.set_line_cap(document, style)}
+    end
+
+    def handle_call({:set_line_join, style}, _from, document) do
+      {:reply, :ok, Document.set_line_join(document, style)}
+    end
+
+    def handle_call({:rectangle, coords, dimensions}, _from, document) do
+      {:reply, :ok, Document.rectangle(document, coords, dimensions)}
+    end
+
+    def handle_call({:line, coords, coords_to}, _from, document) do
+      {:reply, :ok, Document.line(document, coords, coords_to)}
+    end
+
+    def handle_call({:move_to, coords}, _from, document) do
+      {:reply, :ok, Document.move_to(document, coords)}
+    end
+
+    def handle_call({:line_append, coords}, _from, document) do
+      {:reply, :ok, Document.line_append(document, coords)}
+    end
+
+    def handle_call(:stroke, _from, document) do
+      {:reply, :ok, Document.stroke(document)}
+    end
+
+    def handle_call(:fill, _from, document) do
+      {:reply, :ok, Document.fill(document)}
+    end
+
+    def handle_call({:set_font, font_name, font_size, opts}, _from, document) do
+      {:reply, :ok, Document.set_font(document, font_name, font_size, opts)}
+    end
+
+    def handle_call({:set_font_size, size}, _from, document) do
+      {:reply, :ok, Document.set_font_size(document, size)}
+    end
+
+    def handle_call({:add_font, path}, _from, document) do
+      {:reply, :ok, Document.add_external_font(document, path)}
+    end
+
+    def handle_call({:set_text_leading, leading}, _from, document) do
+      {:reply, :ok, Document.set_text_leading(document, leading)}
+    end
+
+    def handle_call({:text_at, coords, text, opts}, _from, document) do
+      try do
+        {:reply, :ok, Document.text_at(document, coords, text, opts)}
+      rescue
+        e in RuntimeError -> {:reply, {:error, e.message}, document}
+      end
+    end
+
+    def handle_call({:text_wrap, coords, dimensions, text, opts}, _from, document) do
+      try do
+        {document, remaining} = Document.text_wrap(document, coords, dimensions, text, opts)
+        {:reply, remaining, document}
+      rescue
+        e in RuntimeError -> {:reply, {:error, e.message}, document}
+      end
+    end
+
+    def handle_call({:text_wrap!, coords, dimensions, text, opts}, _from, document) do
+      try do
+        document = Document.text_wrap!(document, coords, dimensions, text, opts)
+        {:reply, :ok, document}
+      rescue
+        e in RuntimeError -> {:reply, {:error, e.message}, document}
+      end
+    end
+
+    def handle_call({:text_lines, coords, lines, opts}, _from, document) do
+      try do
+        {:reply, :ok, Document.text_lines(document, coords, lines, opts)}
+      rescue
+        e in RuntimeError -> {:reply, {:error, e.message}, document}
+      end
+    end
+
+    def handle_call({:table, coords, dimensions, data}, _from, document) do
+      {document, remaining} = Document.table(document, coords, dimensions, data)
+      {:reply, remaining, document}
+    end
+
+    def handle_call({:table, coords, dimensions, data, opts}, _from, document) do
+      {document, remaining} = Document.table(document, coords, dimensions, data, opts)
+      {:reply, remaining, document}
+    end
+
+    def handle_call({:table!, coords, dimensions, data}, _from, document) do
+      document = Document.table!(document, coords, dimensions, data)
+      {:reply, :ok, document}
+    end
+
+    def handle_call({:table!, coords, dimensions, data, opts}, _from, document) do
+      document = Document.table!(document, coords, dimensions, data, opts)
+      {:reply, :ok, document}
+    end
+
+    def handle_call({:add_image, coords, image_path, opts}, _from, document) do
+      {:reply, :ok, Document.add_image(document, coords, image_path, opts)}
+    end
+
+    def handle_call(:size, _from, document) do
+      {:reply, Document.size(document), document}
+    end
+
+    def handle_call(:cursor, _from, document) do
+      {:reply, Document.cursor(document), document}
+    end
+
+    def handle_call({:set_cursor, y}, _from, document) do
+      {:reply, :ok, Document.set_cursor(document, y)}
+    end
+
+    def handle_call({:move_down, amount}, _from, document) do
+      {:reply, :ok, Document.move_down(document, amount)}
+    end
+
+    def handle_call({:set_info, info_list}, _from, document) do
+      {:reply, :ok, Document.put_info(document, info_list)}
+    end
+
+    def handle_call({:set_info, key, value}, _from, document) do
+      {:reply, :ok, Document.put_info(document, key, value)}
+    end
   end
 end

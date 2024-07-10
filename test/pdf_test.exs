@@ -15,9 +15,9 @@ defmodule PdfTest do
         created: ~D"2018-05-22",
         modified: ~D"2018-05-22",
         keywords: "word word word",
-        author: "Test Author",
-        subject: "Test Subject"
+        author: "Test Author"
       )
+      |> Pdf.set_subject("Test Subject")
       |> Pdf.set_font("Helvetica", 12)
       |> Pdf.text_at({10, 400}, "Hello World😃", encoding_replacement_character: "")
       |> Pdf.text_lines({10, 300}, [
@@ -51,7 +51,7 @@ defmodule PdfTest do
       |> Pdf.add_image({310, 365}, fixture("truecolour-alpha.png"))
       |> Pdf.add_font("test/fonts/Verdana-Bold.afm")
       |> Pdf.set_font("Verdana-Bold", 28)
-      |> Pdf.text_at({120.070, 762.653}, "External fonts work")
+      |> Pdf.text_at({120.070, 762.653}, "External fonts work", kerning: true)
       |> Pdf.set_font("Helvetica", 28)
       |> Pdf.text_at({200, 230}, "Back to Helvetica")
       |> Pdf.set_font("Helvetica", size: 16, bold: true)
@@ -103,7 +103,7 @@ defmodule PdfTest do
       |> Pdf.write_to(file_path)
     end)
 
-    if @open, do: System.cmd("open", ["-g", file_path])
+    if @open, do: System.cmd("open", [file_path])
   end
 
   if Kernel.function_exported?(:unicode, :characters_to_nfc_binary, 1) do
