@@ -1,5 +1,6 @@
 defmodule Pdf.DocumentTest do
   use ExUnit.Case, async: true
+  import Pdf.Utils
 
   alias Pdf.{Document, ObjectCollection, Dictionary}
 
@@ -34,5 +35,18 @@ defmodule Pdf.DocumentTest do
 
   defp get_info(document) do
     document.objects |> ObjectCollection.get_object(document.info) |> Dictionary.to_map()
+  end
+
+  test "autoprint/0" do
+    document = Document.autoprint(Document.new())
+    assert {:object, _, _} = ref = document.action
+
+    assert %Dictionary{
+             entries: %{
+               {:name, "S"} => {:name, "Named"},
+               {:name, "Type"} => {:name, "Action"},
+               {:name, "N"} => {:name, "Print"}
+             }
+           } = Document.get_object(document, ref)
   end
 end

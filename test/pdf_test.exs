@@ -51,7 +51,8 @@ defmodule PdfTest do
       |> Pdf.add_image({310, 365}, fixture("truecolour-alpha.png"))
       |> Pdf.add_font("test/fonts/Verdana-Bold.afm")
       |> Pdf.set_font("Verdana-Bold", 28)
-      |> Pdf.text_at({120.070, 762.653}, "External fonts work", kerning: true)
+      # |> Pdf.text_at({120.070, 762.653}, "External fonts work", kerning: true)
+      |> Pdf.text_at({120.070, 762.653}, "External fonts work")
       |> Pdf.set_font("Helvetica", 28)
       |> Pdf.text_at({200, 230}, "Back to Helvetica")
       |> Pdf.set_font("Helvetica", size: 16, bold: true)
@@ -100,6 +101,7 @@ defmodule PdfTest do
         align: :right
       )
       |> elem(0)
+      |> Pdf.autoprint()
       |> Pdf.write_to(file_path)
     end)
 

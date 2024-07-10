@@ -214,6 +214,16 @@ defmodule Pdf do
     pid
   end
 
+  @doc """
+  Adds an autoprint action to the Pdf.
+
+  This is can be useful for generating a PDF that will automatically open the print dialog in a browser
+  """
+  def autoprint(pid) do
+    :ok = GenServer.call(pid, :autoprint)
+    pid
+  end
+
   @doc "Returns the current page number."
   def page_number(pid) do
     GenServer.call(pid, :page_number)
@@ -663,6 +673,11 @@ defmodule Pdf do
     end
 
     @impl true
+    def handle_call(:autoprint, _from, document) do
+      document = Document.autoprint(document)
+      {:reply, :ok, document}
+    end
+
     def handle_call({:write_to, path}, _from, document) do
       File.write!(path, Document.to_iolist(document))
       {:reply, :ok, document}

@@ -1,9 +1,9 @@
 defmodule Pdf.ObjectTest do
   use ExUnit.Case, async: true
+  import Pdf.Utils
 
   alias Pdf.Object
   alias Pdf.Dictionary
-  alias Pdf.Utils
 
   test "new/1" do
     object = Object.new(1)
@@ -42,14 +42,14 @@ defmodule Pdf.ObjectTest do
   test "size" do
     dict =
       Dictionary.new()
-      |> Dictionary.put("Author", Utils.n("Test Author"))
-      |> Dictionary.put("Creator", Utils.n("Test Creator"))
-      |> Dictionary.put("Keywords", Utils.n("word word word"))
-      |> Dictionary.put("Producer", Utils.n("Test producer"))
-      |> Dictionary.put("Subject", Utils.n("Test Subject"))
-      |> Dictionary.put("Title", Utils.n("Test Document"))
-      |> Dictionary.put("Title", Utils.n("Test Document"))
-      |> Dictionary.put("Title", Utils.n("Test Document"))
+      |> Dictionary.put("Author", n("Test Author"))
+      |> Dictionary.put("Creator", n("Test Creator"))
+      |> Dictionary.put("Keywords", n("word word word"))
+      |> Dictionary.put("Producer", n("Test producer"))
+      |> Dictionary.put("Subject", n("Test Subject"))
+      |> Dictionary.put("Title", n("Test Document"))
+      |> Dictionary.put("Title", n("Test Document"))
+      |> Dictionary.put("Title", n("Test Document"))
 
     object = Object.new(1, dict)
 

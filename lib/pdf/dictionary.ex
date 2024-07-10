@@ -1,7 +1,7 @@
 defmodule Pdf.Dictionary do
   @moduledoc false
-  import Pdf.Size
   import Pdf.Utils
+  import Pdf.Size
 
   @dict_start "<<\n"
   @dict_start_length byte_size(@dict_start)
@@ -19,6 +19,7 @@ defmodule Pdf.Dictionary do
 
   def new(map) do
     map
+    |> Enum.filter(fn {_, value} -> value != nil end)
     |> Enum.reduce(new(), fn {key, value}, dictionary ->
       put(dictionary, key, value)
     end)

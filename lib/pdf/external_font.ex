@@ -22,6 +22,7 @@ defmodule Pdf.ExternalFont do
             kern_pairs: []
 
   import Pdf.Utils
+
   alias Pdf.Font.Metrics
   alias Pdf.{Array, Dictionary}
 

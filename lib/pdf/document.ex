@@ -8,6 +8,7 @@ defmodule Pdf.Document do
             current_font_size: 0,
             pages: [],
             opts: [],
+            action: nil,
             images: %{}
 
   import Pdf.Utils
@@ -40,6 +41,24 @@ defmodule Pdf.Document do
 
     document = %__MODULE__{objects: collection, fonts: fonts, info: info, opts: opts}
     add_page(document, opts)
+  end
+
+  def autoprint(document) do
+    action =
+      ObjectCollection.create_object(
+        document.objects,
+        Dictionary.new(%{
+          "S" => n("Named"),
+          "Type" => n("Action"),
+          "N" => n("Print")
+        })
+      )
+
+    put_in(document.action, action)
+  end
+
+  def get_object(document, ref) do
+    ObjectCollection.get_object(document.objects, ref)
   end
 
   @info_map %{
@@ -228,7 +247,11 @@ defmodule Pdf.Document do
     catalogue =
       ObjectCollection.create_object(
         document.objects,
-        Dictionary.new(%{"Type" => n("Catalog"), "Pages" => master_page})
+        Dictionary.new(%{
+          "Type" => n("Catalog"),
+          "Pages" => master_page,
+          "OpenAction" => document.action
+        })
       )
 
     objects = Enum.sort_by(ObjectCollection.all(document.objects), &sort_objects/1)
