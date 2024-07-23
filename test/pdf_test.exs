@@ -197,4 +197,38 @@ defmodule PdfTest do
                    end
     end)
   end
+
+  test "cleanup" do
+    {:ok, pdf} = Pdf.new(size: :a4)
+    {:links, links} = Process.info(pdf, :links)
+    {:dictionary, dictionary} = Process.info(pdf, :dictionary)
+    ancestors = Keyword.get(dictionary, :"$ancestors")
+    # One of our links is an ancestor which will remain active after cleanup
+    children = links -- ancestors
+    # We expect an Object collection and a Fonts server to be linked
+    assert length(children) == 2
+
+    assert :ok = Pdf.cleanup(pdf)
+
+    assert Process.alive?(pdf) == false
+    refute Enum.any?(children, &Process.alive?/1)
+  end
+
+  test "crash cleanup" do
+    {:ok, pdf} = Pdf.new(size: :a4)
+    # Unlink so we can crash the PDF process without raising an error in the test
+    Process.unlink(pdf)
+    {:links, links} = Process.info(pdf, :links)
+    {:dictionary, dictionary} = Process.info(pdf, :dictionary)
+    ancestors = Keyword.get(dictionary, :"$ancestors")
+    # One of our links is an ancestor which will remain active after crash
+    children = links -- ancestors
+    # We expect an Object collection and a Fonts server to be linked
+    assert length(children) == 2
+
+    Process.exit(pdf, :kill)
+
+    assert Process.alive?(pdf) == false
+    refute Enum.any?(children, &Process.alive?/1)
+  end
 end

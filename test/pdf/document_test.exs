@@ -1,6 +1,5 @@
 defmodule Pdf.DocumentTest do
   use ExUnit.Case, async: true
-  import Pdf.Utils
 
   alias Pdf.{Document, ObjectCollection, Dictionary}
 

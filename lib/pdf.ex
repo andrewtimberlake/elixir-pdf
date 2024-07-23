@@ -137,7 +137,6 @@ defmodule Pdf do
   end
 
   @deprecated "Use build/2 instead"
-  @spec open((any() -> any())) :: any()
   def open(opts \\ [], func) do
     build(opts, func)
   end
@@ -492,7 +491,7 @@ defmodule Pdf do
   `:align` | :left , :center , :right | :left
   `:kerning` | `boolean` | false
   """
-  @spec text_wrap(pid, coords(), dimension(), binary | list, keyword) :: pid
+  @spec text_wrap(pid, coords(), dimension(), binary | list, keyword) :: {pid, :complete | term()}
   def text_wrap(pid, coords, dimensions, text, opts) do
     result = GenServer.call(pid, {:text_wrap, coords, dimensions, text, opts})
     {pid, result}
@@ -657,12 +656,6 @@ defmodule Pdf do
     pid
   end
 
-  def terminate(_, %{objects: objects, fonts: fonts}) do
-    GenServer.stop(objects)
-    GenServer.stop(fonts)
-    nil
-  end
-
   defmodule Server do
     use GenServer
 
@@ -684,7 +677,7 @@ defmodule Pdf do
     end
 
     def handle_call(:export, _from, document) do
-      {:reply, Document.to_iolist(document) |> :binary.list_to_bin(), document}
+      {:reply, :binary.list_to_bin(Document.to_iolist(document)), document}
     end
 
     def handle_call({:add_page, size}, _from, document) do
@@ -835,6 +828,13 @@ defmodule Pdf do
 
     def handle_call({:set_info, key, value}, _from, document) do
       {:reply, :ok, Document.put_info(document, key, value)}
+    end
+
+    @impl GenServer
+    def terminate(_, %{objects: objects, fonts: fonts}) do
+      GenServer.stop(objects)
+      GenServer.stop(fonts)
+      nil
     end
   end
 end
