@@ -23,7 +23,7 @@ defmodule Pdf.Mixfile do
   defp elixirc_paths(_), do: ["lib"]
 
   def application do
-    [applications: [:logger]]
+    [extra_applications: [:logger]]
   end
 
   defp deps do
@@ -32,8 +32,7 @@ defmodule Pdf.Mixfile do
       {:credo, "~> 1.0", only: [:dev, :test]},
 
       # Docs
-      {:ex_doc, "~> 0.0", only: [:dev, :docs]},
-      {:earmark, "~> 1.0", only: [:dev, :docs]}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 
@@ -58,9 +57,9 @@ defmodule Pdf.Mixfile do
       ],
       main: "readme",
       source_url: @github_url,
-      source_ref: "v#{@version}",
+      source_ref: @version,
       canonical: "http://hexdocs.pm/pdf",
-      assets: "extra_doc/assets",
+      assets: %{"extra_doc/assets" => "assets"},
       formatters: ["html"]
     ]
   end
