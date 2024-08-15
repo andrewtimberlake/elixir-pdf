@@ -16,4 +16,12 @@ defmodule Pdf.Utils do
   @doc false
   def a(%Pdf.Array{} = array), do: array
   def a(list), do: Pdf.Array.new(list)
+
+  def font_field(font, name) do
+    if is_struct(font) do
+      Map.get(font, name)
+    else
+      apply(font, name, [])
+    end
+  end
 end

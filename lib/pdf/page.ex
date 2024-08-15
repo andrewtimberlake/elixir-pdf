@@ -234,7 +234,7 @@ defmodule Pdf.Page do
           if Enum.any?([:bold, :italic], &Keyword.has_key?(opts, &1)) do
             Fonts.get_font(fonts, font, Keyword.take(opts, [:bold, :italic]))
           else
-            Fonts.get_font(fonts, font.name, [])
+            Fonts.get_font(fonts, font_field(font, :name), [])
           end
 
         font_size = Keyword.get(opts, :font_size, page.current_font_size)
@@ -242,10 +242,10 @@ defmodule Pdf.Page do
         color = Keyword.get(opts, :color, page.fill_color)
 
         height = Enum.max([leading, font_size])
-        ascender = font.module.ascender * font_size / 1000
-        descender = -(font.module.descender * font_size / 1000)
-        cap_height = (font.module.cap_height || 0) * font_size / 1000
-        x_height = (font.module.x_height || 0) * font_size / 1000
+        ascender = font_field(font.module, :ascender) * font_size / 1000
+        descender = -(font_field(font.module, :descender) * font_size / 1000)
+        cap_height = (font_field(font.module, :cap_height) || 0) * font_size / 1000
+        x_height = (font_field(font.module, :x_height) || 0) * font_size / 1000
         line_gap = (font_size - (ascender + descender)) / 2
 
         width = Font.text_width(font.module, text, font_size, opts)
@@ -463,11 +463,12 @@ defmodule Pdf.Page do
     attributed_text
     |> merge_same_opts
     |> Enum.reduce(page, fn {text, _width, opts}, page ->
+      module = opts[:font].module
       page
-      |> set_font(opts[:font].module.name, opts[:font_size], opts)
+      |> set_font(font_field(module, :name), opts[:font_size], opts)
       |> set_text_leading(opts[:leading])
       |> set_fill_color(opts[:color])
-      |> push(kerned_text(opts[:font].module, text, opts))
+      |> push(kerned_text(module, text, opts))
     end)
   end
 
