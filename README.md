@@ -33,6 +33,18 @@ def deps do
 end
 ```
 
+## PDF Version
+
+By default, the PDF version is set to `1.7`.
+
+If needed, the PDF version can be set by using the `:version` compile-time option.
+
+**NOTE:** All functionality in this library is developed against the 1.7 specification, it is up to you to ensure that you use only the functionality that is available in the version you choose.
+
+```elixir
+config :pdf, :version, "1.7"
+```
+
 ## Copyright and License
 
 Copyright (c) 2016 Andrew Timberlake

@@ -26,7 +26,10 @@ defmodule Pdf.Document do
     Text
   }
 
-  @header <<"%PDF-1.7\n%", 304, 345, 362, 345, 353, 247, 363, 240, 320, 304, 306, 10>>
+  @version Application.compile_env(:pdf, :version, "1.7")
+  # 7.5.2 the header line shall be immediately followed by a comment line containing
+  # at least four binary characters-that is, characters whose codes are 128 or greater.
+  @header <<"%PDF-#{@version}\n%", 0xE2, 0xE3, 0xCF, 0xD3, "\r\n">>
   @header_size byte_size(@header)
 
   def new(opts \\ []) do
