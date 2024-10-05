@@ -541,8 +541,8 @@ defmodule Pdf.Page do
 
   defp kern_text(text, font, true) do
     text =
-      text
-      |> font.kern_text()
+      font
+      |> Font.kern_text(text)
       |> Text.escape()
       |> Enum.map(fn
         str when is_binary(str) -> s(str)

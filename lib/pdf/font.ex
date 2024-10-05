@@ -2,159 +2,28 @@ defmodule Pdf.Font do
   @moduledoc false
 
   import Pdf.Utils
-  alias Pdf.Font.Metrics
+  # alias Pdf.Font.Metrics
   alias Pdf.{Array, Dictionary, Font}
 
-  font_metrics =
-    Path.join(__DIR__, "../../fonts/*.afm")
-    |> Path.wildcard()
-    |> Enum.map(fn afm_file ->
-      afm_file
-      |> File.stream!()
-      |> Enum.reduce(%Metrics{}, fn line, metrics ->
-        Metrics.process_line(String.replace_suffix(line, "\n", ""), metrics)
-      end)
-    end)
-
-  font_metrics
-  |> Enum.each(fn metrics ->
-    font_module = String.to_atom("Elixir.Pdf.Font.#{String.replace(metrics.name, "-", "")}")
-
-    defmodule font_module do
-      @moduledoc false
-      @doc "The name of the font"
-      def name, do: unquote(metrics.name)
-      @doc "The full name of the font"
-      def full_name, do: unquote(metrics.full_name)
-      @doc "The font family of the font"
-      def family_name, do: unquote(metrics.family_name)
-      @doc "The font weight"
-      def weight, do: unquote(metrics.weight)
-      @doc "The font italic angle"
-      def italic_angle, do: unquote(metrics.italic_angle)
-      @doc "The font encoding"
-      def encoding, do: unquote(metrics.encoding)
-      @doc "The first character defined in `widths/0`"
-      def first_char, do: unquote(metrics.first_char)
-      @doc "The last character defined in `widths/0`"
-      def last_char, do: unquote(metrics.last_char)
-      @doc "The font ascender"
-      def ascender, do: unquote(metrics.ascender || 0)
-      @doc "The font descender"
-      def descender, do: unquote(metrics.descender || 0)
-      @doc "The font cap height"
-      def cap_height, do: unquote(metrics.cap_height)
-      @doc "The font x-height"
-      def x_height, do: unquote(metrics.x_height)
-      @doc "The font bbox"
-      def bbox, do: unquote(Macro.escape(metrics.bbox))
-
-      {_llx, lly, _urx, ury} = metrics.bbox
-
-      def line_gap,
-        do: unquote(ury - lly - ((metrics.ascender || 0) + (metrics.descender || 0)))
-
-      @doc """
-      Returns the character widths of characters beginning from `first_char/0`
-      """
-      def widths, do: unquote(Metrics.widths(metrics))
-
-      @doc """
-      Returns the width of the specific character
-
-      Examples:
-
-          iex> #{inspect(__MODULE__)}.width("A")
-          123
-      """
-      def width(char_code)
-
-      Pdf.Encoding.WinAnsi.characters()
-      |> Enum.each(fn {char_code, _, name} ->
-        case metrics.glyphs[name] do
-          nil ->
-            def width(unquote(char_code)), do: 0
-
-          %{width: width} ->
-            def width(unquote(char_code)), do: unquote(width)
-        end
-      end)
-
-      def kern_text(""), do: [""]
-
-      metrics.kern_pairs
-      |> Enum.each(fn {first, second, amount} ->
-        def kern_text(<<unquote(first)::integer, unquote(second)::integer, rest::binary>>) do
-          [
-            <<unquote(first)>>,
-            unquote(-amount) | kern_text(<<unquote(second)::integer, rest::binary>>)
-          ]
-        end
-      end)
-
-      def kern_text(<<first::integer, second::integer, rest::binary>>) do
-        [head | tail] = kern_text(<<second::integer, rest::binary>>)
-        [<<first::integer, head::binary>> | tail]
-      end
-
-      def kern_text(<<_::integer>> = char), do: [char]
-    end
-  end)
-
-  @doc ~S"""
-  Returns the font module for the named font
-
-  # Example:
-
-  iex> Pdf.Font.lookup("Helvetica-BoldOblique")
-  Pdf.Font.HelveticaBoldOblique
-  """
-  def lookup(name, opts \\ [])
-
-  font_metrics
-  |> Enum.each(fn metrics ->
-    font_module = String.to_atom("Elixir.Pdf.Font.#{String.replace(metrics.name, "-", "")}")
-
-    if metrics.weight == :bold and metrics.italic_angle == 0 do
-      def lookup(unquote(metrics.family_name), bold: true), do: unquote(font_module)
-
-      def lookup(unquote(metrics.family_name), bold: true, italic: false),
-        do: unquote(font_module)
-
-      def lookup(unquote(metrics.family_name), italic: false, bold: true),
-        do: unquote(font_module)
-    end
-
-    if metrics.weight == :bold and metrics.italic_angle != 0 do
-      def lookup(unquote(metrics.family_name), bold: true, italic: true), do: unquote(font_module)
-      def lookup(unquote(metrics.family_name), italic: true, bold: true), do: unquote(font_module)
-    end
-
-    if metrics.weight != :bold and metrics.italic_angle == 0 do
-      def lookup(unquote(metrics.family_name), italic: false, bold: false),
-        do: unquote(font_module)
-
-      def lookup(unquote(metrics.family_name), bold: false, italic: false),
-        do: unquote(font_module)
-
-      def lookup(unquote(metrics.family_name), []),
-        do: unquote(font_module)
-    end
-
-    if metrics.weight != :bold and metrics.italic_angle != 0 do
-      def lookup(unquote(metrics.family_name), italic: true), do: unquote(font_module)
-
-      def lookup(unquote(metrics.family_name), bold: false, italic: true),
-        do: unquote(font_module)
-
-      def lookup(unquote(metrics.family_name), italic: true, bold: false),
-        do: unquote(font_module)
-    end
-
-    # def lookup(unquote(metrics.name), []), do: unquote(font_module)
-  end)
-
-  def lookup(_name, _opts), do: nil
+  @derive {Inspect, only: [:name, :family_name, :weight, :italic_angle]}
+  defstruct name: nil,
+            full_name: nil,
+            family_name: nil,
+            weight: nil,
+            italic_angle: nil,
+            encoding: nil,
+            first_char: nil,
+            last_char: nil,
+            ascender: nil,
+            descender: nil,
+            cap_height: nil,
+            x_height: nil,
+            fixed_pitch: nil,
+            bbox: nil,
+            widths: nil,
+            glyph_widths: nil,
+            glyphs: nil,
+            kern_pairs: nil
 
   def to_dictionary(font, id) do
     Dictionary.new()
@@ -176,12 +45,12 @@ defmodule Pdf.Font do
     iex> Font.width(font, "A")
     123
   """
-  def width(%Pdf.ExternalFont{} = font, char_code) do
-    Pdf.ExternalFont.width(font, char_code)
+  def width(font, <<char_code::integer>> = str) when is_binary(str) do
+    width(font, char_code)
   end
 
   def width(font, char_code) do
-    font.width(char_code)
+    font.glyph_widths[char_code] || 0
   end
 
   @doc ~S"""
@@ -230,11 +99,44 @@ defmodule Pdf.Font do
 
   def kern_text(_font, ""), do: [""]
 
+  def kern_text(font, <<first::integer, second::integer, rest::binary>>) do
+    font.kern_pairs
+    |> Enum.find(fn {f, s, _amount} -> f == first && s == second end)
+    |> case do
+      {f, _s, amount} ->
+        [<<f>>, -amount | kern_text(font, <<second::integer, rest::binary>>)]
+
+      nil ->
+        [head | tail] = kern_text(font, <<second::integer, rest::binary>>)
+        [<<first::integer, head::binary>> | tail]
+    end
+  end
+
+  def kern_text(_font, <<_::integer>> = char), do: [char]
+
+  def kern_text(_font, ""), do: [""]
+
   def kern_text(%Pdf.ExternalFont{} = font, text) do
     Pdf.ExternalFont.kern_text(font, text)
   end
 
   def kern_text(font, text) do
     font.kern_text(text)
+  end
+
+  @doc """
+  Lookup a font by family name and attributes [bold: true, italic: true]
+  """
+  def matches_attributes(font, attrs) do
+    bold = Keyword.get(attrs, :bold, false)
+    italic = Keyword.get(attrs, :italic, false)
+
+    cond do
+      bold && !italic && font.weight == :bold && font.italic_angle == 0 -> true
+      bold && italic && font.weight == :bold && font.italic_angle != 0 -> true
+      !bold && !italic && font.weight != :bold && font.italic_angle == 0 -> true
+      !bold && italic && font.weight != :bold && font.italic_angle != 0 -> true
+      true -> false
+    end
   end
 end

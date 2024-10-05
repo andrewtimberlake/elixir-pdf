@@ -36,6 +36,23 @@ defmodule Pdf.Font.Metrics do
     end)
   end
 
+  def map_widths(font) do
+    Pdf.Encoding.WinAnsi.characters()
+    |> Enum.map(fn {_, char, name} ->
+      width =
+        case font.glyphs[name] do
+          nil ->
+            0
+
+          %{width: width} ->
+            width
+        end
+
+      {char, width}
+    end)
+    |> Map.new()
+  end
+
   def process_line(<<"FontName ", data::binary>>, metrics), do: %{metrics | name: data}
   def process_line(<<"FullName ", data::binary>>, metrics), do: %{metrics | full_name: data}
   def process_line(<<"FamilyName ", data::binary>>, metrics), do: %{metrics | family_name: data}

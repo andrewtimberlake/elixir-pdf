@@ -8,35 +8,28 @@ defmodule Pdf.FontsTest do
   test "looking up an internal font by name" do
     document = Document.new()
 
-    assert %Fonts.FontReference{module: Pdf.Font.Helvetica} =
+    assert %Fonts.FontReference{module: %Pdf.Font{name: "Helvetica"}} =
              Fonts.get_font(document.fonts, "Helvetica", [])
-  end
-
-  test "looking up an internal font by font, bold" do
-    document = Document.new()
-
-    assert %Fonts.FontReference{module: Pdf.Font.HelveticaBold} =
-             Fonts.get_font(document.fonts, Pdf.Font.Helvetica, bold: true)
   end
 
   test "looking up an internal font by name, bold" do
     document = Document.new()
 
-    assert %Fonts.FontReference{module: Pdf.Font.HelveticaBold} =
+    assert %Fonts.FontReference{module: %Pdf.Font{name: "Helvetica-Bold"}} =
              Fonts.get_font(document.fonts, "Helvetica", bold: true)
   end
 
   test "looking up an internal font by name, italic" do
     document = Document.new()
 
-    assert %Fonts.FontReference{module: Pdf.Font.HelveticaOblique} =
+    assert %Fonts.FontReference{module: %Pdf.Font{name: "Helvetica-Oblique"}} =
              Fonts.get_font(document.fonts, "Helvetica", italic: true)
   end
 
   test "looking up an internal font by name, bold, italic" do
     document = Document.new()
 
-    assert %Fonts.FontReference{module: Pdf.Font.HelveticaBoldOblique} =
+    assert %Fonts.FontReference{module: %Pdf.Font{name: "Helvetica-BoldOblique"}} =
              Fonts.get_font(document.fonts, "Helvetica", italic: true, bold: true)
   end
 

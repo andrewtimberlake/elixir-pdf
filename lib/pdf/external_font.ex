@@ -1,5 +1,6 @@
 defmodule Pdf.ExternalFont do
   @moduledoc false
+  @derive {Inspect, only: [:name, :family_name, :weight, :italic_angle]}
   defstruct name: nil,
             font_file: nil,
             dictionary: nil,
@@ -49,8 +50,6 @@ defmodule Pdf.ExternalFont do
 
     %__MODULE__{
       name: font_metrics.name,
-      font_file: font_file,
-      dictionary: font_file_dictionary(part1, part2, part3),
       full_name: font_metrics.full_name,
       family_name: font_metrics.family_name,
       weight: font_metrics.weight,
@@ -65,9 +64,11 @@ defmodule Pdf.ExternalFont do
       fixed_pitch: font_metrics.fixed_pitch,
       bbox: font_metrics.bbox,
       widths: widths,
-      glyph_widths: map_widths(font_metrics),
+      glyph_widths: Metrics.map_widths(font_metrics),
       glyphs: font_metrics.glyphs,
-      kern_pairs: font_metrics.kern_pairs
+      kern_pairs: font_metrics.kern_pairs,
+      font_file: font_file,
+      dictionary: font_file_dictionary(part1, part2, part3)
     }
   end
 
@@ -111,23 +112,6 @@ defmodule Pdf.ExternalFont do
   def size(%__MODULE__{} = font) do
     # size_of(font.dictionary) + byte_size(font.font_file) + byte_size(@stream_start <> @stream_end)
     byte_size(to_iolist(font) |> Enum.join())
-  end
-
-  defp map_widths(font) do
-    Pdf.Encoding.WinAnsi.characters()
-    |> Enum.map(fn {_, char, name} ->
-      width =
-        case font.glyphs[name] do
-          nil ->
-            0
-
-          %{width: width} ->
-            width
-        end
-
-      {char, width}
-    end)
-    |> Map.new()
   end
 
   @doc """
