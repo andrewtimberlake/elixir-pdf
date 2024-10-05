@@ -4,7 +4,7 @@ defmodule Pdf.TextTest do
   alias Pdf.Text
 
   setup do
-    font = Pdf.Font.Helvetica
+    font = Pdf.Fonts.get_internal_font("Helvetica")
     font_size = 10
     {:ok, font: font, font_size: font_size}
   end
