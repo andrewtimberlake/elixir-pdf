@@ -28,7 +28,7 @@ Add `:pdf` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:pdf, "~> 0.6"},
+    {:pdf, "~> 0.7"},
   ]
 end
 ```
