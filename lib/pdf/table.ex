@@ -242,7 +242,7 @@ defmodule Pdf.Table do
           |> Enum.max()
       end)
     end)
-    |> List.zip()
+    |> Enum.zip()
     # TODO: I don't know how efficient it is to work with tuples and back to lists
     #   It may be good to do a zip/1 that returns a list of lists again
     |> Enum.map(&Tuple.to_list/1)
