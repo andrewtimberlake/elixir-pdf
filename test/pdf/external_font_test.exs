@@ -1,5 +1,5 @@
 defmodule Pdf.ExternalFontTest do
-  use ExUnit.Case, asyn: true
+  use ExUnit.Case, async: true
 
   alias Pdf.ExternalFont
   alias Pdf.Font
