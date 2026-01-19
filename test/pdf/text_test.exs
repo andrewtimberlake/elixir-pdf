@@ -25,6 +25,16 @@ defmodule Pdf.TextTest do
                {"world", 23.94, [kerning: true]}
              ]
     end
+
+    test "it keeps currency format as a single chunk", %{font: font, font_size: font_size} do
+      string = "$1,234.00"
+      assert [{^string, _width, []}] = Text.chunk_text(string, font, font_size)
+    end
+
+    test "it respects non-breaking space as a single chunk", %{font: font, font_size: font_size} do
+      string = "Hello#{Text.non_breaking_space()}world"
+      assert [{^string, _width, []}] = Text.chunk_text(string, font, font_size)
+    end
   end
 
   describe "wrap_chunks/2" do

@@ -139,6 +139,27 @@ defmodule Pdf.Document do
     {%{document | current: page}, remaining}
   end
 
+  def render_table(
+        %__MODULE__{current: page} = document,
+        xy,
+        wh,
+        {:continue, %Pdf.Table.Table{} = table}
+      ) do
+    {page, remaining} = Pdf.Table.render(page, xy, wh, table)
+    {%{document | current: page}, remaining}
+  end
+
+  def render_table(
+        %__MODULE__{current: page} = document,
+        xy,
+        {w, _h} = wh,
+        %Pdf.Table.Table{} = table
+      ) do
+    table = Pdf.Table.prepare(page, table, w)
+    {page, remaining} = Pdf.Table.render(page, xy, wh, table)
+    {%{document | current: page}, remaining}
+  end
+
   def table!(document, xy, wh, data), do: table!(document, xy, wh, data, [])
 
   def table(document, xy, wh, data), do: table(document, xy, wh, data, [])

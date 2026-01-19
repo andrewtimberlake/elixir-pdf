@@ -13,19 +13,24 @@ defmodule Pdf.Text do
 
   def escape(other), do: other
 
-  def chunk_text(string, font, font_size, opts \\ []) do
-    zero_width_space = "\u200B"
-    soft_hyphen = "\u00AD"
-    hyphen = "-"
-    whitespace = "\s\t#{zero_width_space}\n"
-    break_chars = " \t\n\v\r#{zero_width_space}#{soft_hyphen}#{hyphen}"
+  @non_breaking_space "\u00A0"
+  def non_breaking_space, do: @non_breaking_space
+  @zero_width_space "\u200B"
+  def zero_width_space, do: @zero_width_space
+  @soft_hyphen "\u00AD"
+  def soft_hyphen, do: @soft_hyphen
+  @hyphen "-"
+  def hyphen, do: @hyphen
 
+  def chunk_text(string, font, font_size, opts \\ []) do
+    whitespace = " \t#{@zero_width_space}\n"
+    break_chars = " \t\n\v\r#{@zero_width_space}#{@soft_hyphen}#{@hyphen}"
     [
-      "([^#{break_chars}]+)(#{soft_hyphen})",
-      "([^#{break_chars}]+#{hyphen}+)",
+      "([^#{break_chars}]+)(#{@soft_hyphen})",
+      "([^#{break_chars}]+#{@hyphen}+)",
       "([^#{break_chars}]+)",
       "([#{whitespace}])",
-      "(#{hyphen}+[^#{break_chars}]*)"
+      "(#{@hyphen}+[^#{break_chars}]*)"
     ]
     |> Enum.join("|")
     |> Regex.compile!("u")

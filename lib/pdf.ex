@@ -532,11 +532,17 @@ defmodule Pdf do
     end
   end
 
+  def render_table(pid, coords, dimensions, data) do
+    result = GenServer.call(pid, {:render_table, coords, dimensions, data})
+    {pid, result}
+  end
+
   @doc """
   Add a table in the document at the given coordinates.
 
   See [Tables](tables.html) for more information on how to use tables.
   """
+  @deprecated "Use render_table/4 instead"
   def table(pid, coords, dimensions, data, opts \\ []) do
     result = GenServer.call(pid, {:table, coords, dimensions, data, opts})
     {pid, result}
@@ -548,6 +554,7 @@ defmodule Pdf do
 
   See [Tables](tables.html) for more information on how to use tables.
   """
+  @deprecated "Use render_table!/4 instead"
   def table!(pid, coords, dimensions, data, opts \\ []) do
     :ok = GenServer.call(pid, {:table!, coords, dimensions, data, opts})
     pid
@@ -780,6 +787,11 @@ defmodule Pdf do
       rescue
         e in RuntimeError -> {:reply, {:error, e.message}, document}
       end
+    end
+
+    def handle_call({:render_table, coords, dimensions, data}, _from, document) do
+      {document, remaining} = Document.render_table(document, coords, dimensions, data)
+      {:reply, remaining, document}
     end
 
     def handle_call({:table, coords, dimensions, data}, _from, document) do

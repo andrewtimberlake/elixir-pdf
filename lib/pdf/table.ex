@@ -1,6 +1,7 @@
 defmodule Pdf.Table do
   @moduledoc false
   alias Pdf.{Page, Text}
+  alias Pdf.Table.{Table, Row, Cell, Column}
 
   def table!(page, xy, wh, data, opts \\ [])
 
@@ -41,6 +42,642 @@ defmodule Pdf.Table do
       |> set_col_dimensions({x, y}, {w, h}, col_opts)
 
     table(page, {x, y}, {w, h}, {:continue, data}, opts)
+  end
+
+  @doc """
+  Prepares a table for rendering.
+  During preparation:
+    - the table data is chunked into attributed text
+    - inherited options are merged
+    - column widths are calculated and distributed
+
+  ## Parameters
+  - `page`: The page to prepare the table for
+  - `table`: The table to prepare
+  - `width`: The width of the table in points
+
+  """
+  def prepare(page, %Table{} = table, width) do
+    # Generate or use existing columns
+    columns = determine_columns(table)
+
+    # Chunk cell data and merge options
+    prepared_rows =
+      table.rows
+      # We are now reversing rows so they are the correct order for rendering
+      |> Enum.reduce([], fn row, acc ->
+        [prepare_row(page, row, table, columns) | acc]
+      end)
+
+    # Calculate column widths
+    columns = calculate_column_widths(prepared_rows, columns, width, table)
+
+    %{table | rows: prepared_rows, columns: columns}
+  end
+
+  @doc """
+  Renders a prepared table.
+
+  ## Parameters
+  - `page`: The page to render the table on
+  - `{x, y}`: The position of the table on the page in points
+  - `{w, h}`: The allowed width and height of the table in points
+  - `%Table{} = table`: The prepared table to render
+
+  ## Returns
+  - `{page, :complete}`: The table was fully rendered
+  - `{page, {:continue, %Table{}}}`: The table was partially rendered, and the table struct is updated with the remaining table data.
+  """
+  def render(page, {x, :cursor}, {w, h}, %Table{} = table) do
+    render(page, {x, Page.cursor(page)}, {w, h}, table)
+  end
+
+  def render(page, {x, :cursor}, {w, h}, {:continue, %Table{} = table}) do
+    render(page, {x, Page.cursor(page)}, {w, h}, table)
+  end
+
+  def render(page, {x, y}, {w, h}, %Table{} = table) do
+    if Enum.empty?(table.rows) do
+      {page, []}
+    else
+      do_render(page, {x, y}, {w, h}, table)
+    end
+  end
+
+  defp do_render(page, {x, y}, {w, h}, %Table{rows: rows, columns: columns} = table) do
+    case render_rows(page, {x, y}, {w, h}, rows, table, columns, []) do
+      {page, []} ->
+        {page, :complete}
+
+      {page, remaining} ->
+        repeat_rows = table.repeat_header || 0
+        header_rows = Enum.take(rows, repeat_rows)
+        remaining_table = %{table | rows: header_rows ++ remaining}
+        {page, {:continue, remaining_table}}
+    end
+  end
+
+  defp render_rows(page, _xy, _wh, [], _table, _columns, _acc), do: {page, []}
+
+  defp render_rows(page, {x, y}, {w, h}, [row | tail], table, columns, acc) do
+    {page, row_height, overflow_row} = render_row(page, {x, y}, {w, h}, row, table, columns)
+
+    cond do
+      # Row doesn't fit in remaining height
+      row_height > h ->
+        {page, [row | tail] ++ acc}
+
+      # We have overflow
+      overflow_row != nil ->
+        {page, [overflow_row | tail] ++ acc}
+
+      true ->
+        render_rows(page, {x, y - row_height}, {w, h - row_height}, tail, table, columns, acc)
+    end
+  end
+
+  defp render_row(page, {x, y}, {w, h}, %Row{cells: cells}, table, columns) do
+    # Filter out nil cells (from overflow)
+    cells = Enum.reject(cells, &is_nil/1)
+
+    # Calculate row height and overflow first
+    {cell_heights, overflow_cells} =
+      calculate_row_metrics(page, h, cells, table, columns)
+
+    row_height = Enum.max(cell_heights, fn -> 0 end)
+    # Draw at y - row_height (top of row, like existing code)
+    draw_y = y - row_height
+
+    # Now draw cells at correct position (only non-nil cells)
+    page = draw_row(page, {x, draw_y}, {w, h}, cells, table, columns, row_height)
+
+    page = Page.set_cursor(page, draw_y)
+
+    # Reconstruct overflow row (overflow_cells are already in correct order)
+    overflow_row =
+      if Enum.any?(overflow_cells, &(&1 != nil)),
+        do: %Row{cells: Enum.reverse(overflow_cells)},
+        else: nil
+
+    {page, row_height, overflow_row}
+  end
+
+  defp calculate_row_metrics(_page, height, cells, table, columns) do
+    {heights, overflows, _idx} =
+      Enum.reduce(cells, {[], [], 0}, fn cell, {heights_acc, overflow_acc, col_idx} ->
+        colspan = cell.colspan || 1
+        {pt, pr, pb, pl} = cell.padding
+        cell_width = calculate_cell_width(columns, col_idx, colspan)
+        text_width = cell_width - pr - pl
+
+        # Wrap text and handle overflow
+        {lines, overflow} = wrap_cell_text(cell.chunks || [], text_width, table, height)
+
+        # Calculate content height
+        content_height = calculate_content_height(lines)
+
+        # Cell height includes padding
+        cell_height = content_height + pt + pb
+
+        overflow_cell = if Enum.empty?(overflow), do: nil, else: %{cell | chunks: overflow}
+
+        {[cell_height | heights_acc], [overflow_cell | overflow_acc], col_idx + colspan}
+      end)
+
+    {Enum.reverse(heights), overflows}
+  end
+
+  defp draw_row(page, {x, y}, {_w, h}, cells, table, columns, row_height) do
+    Enum.reduce(cells, {page, 0}, fn cell, {page_acc, col_idx} ->
+      colspan = cell.colspan || 1
+
+      cell_x = calculate_cell_x(columns, col_idx, x)
+      cell_width = calculate_cell_width(columns, col_idx, colspan)
+      {_pt, pr, _pb, pl} = cell.padding
+      text_width = cell_width - pr - pl
+
+      # Wrap text and handle overflow (same logic as calculate_row_metrics)
+      {lines, _overflow} = wrap_cell_text(cell.chunks || [], text_width, table, h)
+
+      # Row height already includes padding from calculate_row_metrics
+      page = draw_cell(page_acc, {cell_x, y}, cell_width, row_height, cell, lines)
+
+      {page, col_idx + colspan}
+    end)
+    |> elem(0)
+  end
+
+  defp draw_cell(page, {x, y}, width, height, cell, lines) do
+    {pt, pr, pb, pl} = cell.padding
+    bg_color = cell.background
+    border_val = cell.border
+    border_color = cell.border_color
+
+    page =
+      page
+      |> draw_background(lines, {x, y}, {width, height}, bg_color)
+      |> Page.save_state()
+      |> clip({x + pl, y + pb}, {width - pl - pr, height - pt - pb})
+
+    {page, _} =
+      if Enum.empty?(lines) do
+        {page, :complete}
+      else
+        non_empty_lines = filter_empty_lines(lines)
+
+        if Enum.empty?(non_empty_lines) do
+          {page, :complete}
+        else
+          Page.text_wrap(
+            page,
+            {x + pl, y + height - pt},
+            {width - pl - pr, height},
+            non_empty_lines,
+            extract_text_opts(cell)
+          )
+        end
+      end
+
+    page
+    |> Page.restore_state()
+    |> draw_border({x, y}, {width, height}, border_val, border_color)
+  end
+
+  defp extract_text_opts(%Cell{} = cell) do
+    [
+      font_size: cell.font_size,
+      bold: cell.bold,
+      italic: cell.italic,
+      align: cell.align,
+      kerning: cell.kerning,
+      color: cell.color
+    ]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+  end
+
+  # Wrap cell text and handle overflow
+  defp wrap_cell_text(chunks, text_width, table, max_height) do
+    lines = Text.wrap_all_chunks(chunks, text_width)
+    filtered = filter_empty_lines(lines)
+
+    if table.allow_row_overflow do
+      overflow_lines(filtered, max_height)
+    else
+      {filtered, []}
+    end
+  end
+
+  # Filter out empty lines
+  defp filter_empty_lines(lines) do
+    Enum.filter(lines, fn
+      {:line, line} -> length(line) > 0
+      _ -> false
+    end)
+  end
+
+  # Calculate content height from lines
+  defp calculate_content_height(lines) do
+    if Enum.empty?(lines) do
+      0
+    else
+      Enum.reduce(lines, 0, fn {:line, line}, acc ->
+        if Enum.empty?(line) do
+          acc
+        else
+          line_height = Enum.max(Enum.map(line, &Keyword.get(elem(&1, 2), :height, 0)))
+          line_height + acc
+        end
+      end)
+    end
+  end
+
+  defp calculate_cell_x(columns, col_idx, base_x) do
+    columns
+    |> Enum.slice(0, col_idx)
+    |> Enum.reduce(base_x, fn col, acc -> acc + (col.width || 0) end)
+  end
+
+  defp calculate_cell_width(columns, col_idx, colspan) do
+    columns
+    |> Enum.slice(col_idx, colspan)
+    |> Enum.reduce(0, fn col, acc -> acc + (col.width || 0) end)
+  end
+
+  defp merge_cell_options_for_prepare(
+         %Table{} = table,
+         %Row{} = row,
+         %Cell{} = cell,
+         columns,
+         col_idx
+       ) do
+    default_opts = [padding: {0, 0, 0, 0}, border: {0, 0, 0, 0}]
+    # Start with table options
+    table_opts = struct_to_opts(table) |> Keyword.drop([:rows, :columns])
+
+    # Merge row options
+    row_opts = struct_to_opts(row) |> Keyword.drop([:cells])
+
+    # Merge column options
+    column = Enum.at(columns, col_idx, %Column{})
+    column_opts = struct_to_opts(column)
+
+    # Merge cell options
+    cell_opts =
+      struct_to_opts(cell)
+      |> Keyword.drop([:data, :chunks, :colspan])
+
+    # Merge with inheritance: Cell > Row > Column > Table priority
+    # Merge order: Table -> Column -> Row -> Cell
+    default_opts
+    |> merge_with_inheritance(table_opts)
+    |> merge_with_inheritance(column_opts)
+    |> merge_with_inheritance(row_opts)
+    |> merge_with_inheritance(cell_opts)
+  end
+
+  defp merge_with_inheritance(parent, child) do
+    # Child values override parent values, but nil values don't override
+    # This allows inheritance: if child has nil, keep parent value
+    # Special handling for :border - 0 values explicitly override parent
+    # Special handling for :padding - nil values inherit from parent
+    Enum.reduce(child, parent, fn {key, value}, acc ->
+      cond do
+        key == :border ->
+          # Special border merging: nil inherits, 0 explicitly overrides
+          merged_border = merge_borders(Keyword.get(acc, :border), value)
+          Keyword.put(acc, key, merged_border)
+
+        key == :padding ->
+          # Special padding merging: nil values inherit from parent
+          merged_padding = merge_padding(Keyword.get(acc, :padding), value)
+          Keyword.put(acc, key, merged_padding)
+
+        is_nil(value) ->
+          acc
+
+        true ->
+          Keyword.put(acc, key, value)
+      end
+    end)
+  end
+
+  defp merge_borders(parent, child) do
+    # Both are tuples - merge element by element
+    merge_border_tuples(parent, child)
+  end
+
+  defp merge_border_tuples(parent, child) do
+    # Normalize both to 4-tuples
+    parent_norm = normalize_tuple(parent)
+    child_norm = normalize_tuple(child)
+
+    # Merge: child values (including 0) override parent
+    merge_tuples(child_norm, parent_norm)
+  end
+
+  defp merge_padding(parent, child) do
+    # Both are tuples - merge element by element
+    merge_padding_tuples(parent, child)
+  end
+
+  defp merge_padding_tuples(parent, child) do
+    # Normalize both to 4-tuples (allow nil for padding)
+    parent_norm = normalize_tuple(parent)
+    child_norm = normalize_tuple(child)
+
+    # Merge: child values override parent, but nil in child inherits from parent
+    merge_tuples(child_norm, parent_norm)
+  end
+
+  defp normalize_tuple({all}), do: {all, all, all, all}
+  defp normalize_tuple({tb, lr}), do: {tb, lr, tb, lr}
+  defp normalize_tuple({t, lr, b}), do: {t, lr, b, lr}
+  defp normalize_tuple({t, r, b, l}), do: {t, r, b, l}
+  defp normalize_tuple(all), do: {all, all, all, all}
+
+  def merge_tuples({nil, r, b, l}, {t, _r, _b, _l} = parent),
+    do: merge_tuples({t, r, b, l}, parent)
+
+  def merge_tuples({t, nil, b, l}, {_t, r, _b, _l} = parent),
+    do: merge_tuples({t, r, b, l}, parent)
+
+  def merge_tuples({t, r, nil, l}, {_t, _r, b, _l} = parent),
+    do: merge_tuples({t, r, b, l}, parent)
+
+  def merge_tuples({t, r, b, nil}, {_t, _r, _b, l} = parent),
+    do: merge_tuples({t, r, b, l}, parent)
+
+  def merge_tuples(child, _parent), do: child
+
+  defp struct_to_opts(struct) do
+    struct
+    |> Map.from_struct()
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Keyword.new()
+  end
+
+  defp determine_columns(%Table{columns: nil} = table) do
+    num_cols =
+      table.rows
+      |> Enum.map(fn %Row{cells: cells} ->
+        Enum.reduce(cells, 0, fn cell, acc -> acc + (cell.colspan || 1) end)
+      end)
+      |> Enum.max(fn -> 0 end)
+
+    Enum.map(1..num_cols, fn _ -> Column.new() end)
+  end
+
+  defp determine_columns(%Table{columns: columns}), do: columns
+
+  defp prepare_row(page, %Row{cells: cells} = row, table, columns) do
+    prepared_cells =
+      cells
+      |> Enum.reverse()
+      |> Enum.with_index()
+      |> Enum.map(fn {cell, col_idx} ->
+        prepare_cell(page, cell, table, row, columns, col_idx)
+      end)
+
+    %{row | cells: prepared_cells}
+  end
+
+  # Only prepare cells that don't have chunks yet
+  defp prepare_cell(page, %Cell{data: data, chunks: nil} = cell, table, row, columns, col_idx) do
+    # Merge options for chunking
+    merged_opts = merge_cell_options_for_prepare(table, row, cell, columns, col_idx)
+
+    chunks =
+      data
+      |> Page.annotate_attributed_text(page, merged_opts)
+      |> Text.chunk_attributed_text(merged_opts)
+
+    # Store merged options in cell struct fields for consistent use during render
+    cell = Cell.new(cell, merged_opts)
+    %{cell | chunks: chunks}
+  end
+
+  defp prepare_cell(_page, %Cell{} = cell, _table, _row, _columns, _col_idx), do: cell
+
+  defp calculate_column_widths(rows, columns, total_width, table) do
+    # Calculate content widths for each column
+    # For each row, create a list of column widths (handling colspan)
+    # We need table context for padding inheritance
+    column_width_lists =
+      rows
+      |> Enum.map(fn %Row{} = row ->
+        calculate_row_column_widths(row, table, columns, 0) |> List.flatten()
+      end)
+
+    min_content_widths =
+      column_width_lists
+      |> Enum.zip()
+      |> Enum.map(fn tuple -> tuple |> Tuple.to_list() |> Enum.max() end)
+
+    columns =
+      columns
+      |> Enum.zip(min_content_widths)
+      |> Enum.map(fn {column, width} ->
+        %{column | calculated_min_width: Enum.max([width, column.min_width || 0])}
+      end)
+
+    # Use new width distribution algorithm
+    # calculated_min_width is already set on columns
+    # This treats width (percentage/fixed) as suggestions and calculated_min_width as hard constraint
+    distribute_column_widths(columns, total_width)
+  end
+
+  defp calculate_row_column_widths(%Row{cells: []}, _table, _columns, _col_idx), do: []
+
+  defp calculate_row_column_widths(%Row{cells: [cell | tail]} = row, table, columns, col_idx) do
+    colspan = cell.colspan || 1
+
+    # Use padding from cell struct (already merged during prepare)
+    {_, pr, _, pl} = cell.padding
+
+    # Calculate width for this cell's content
+    cell_content_width =
+      if cell.chunks do
+        cell.chunks
+        |> Enum.flat_map(fn
+          {:line, line} -> line
+          chunk when is_tuple(chunk) and tuple_size(chunk) == 3 -> [chunk]
+          _ -> []
+        end)
+        |> Enum.map(fn {_, width, _} -> width + pr + pl end)
+        |> Enum.max(fn -> 0 end)
+      else
+        0
+      end
+
+    widths =
+      Enum.reduce(1..(colspan - 1)//1, [cell_content_width], fn _i, acc ->
+        [0 | acc]
+      end)
+
+    [
+      widths
+      | calculate_row_column_widths(
+          %Row{row | cells: tail},
+          table,
+          columns,
+          col_idx + colspan
+        )
+    ]
+  end
+
+  # New width distribution algorithm
+  # Treats width (percentage/fixed) as suggestions and calculated_min_width as hard constraint
+  def distribute_column_widths(columns, total_width) do
+    # Phase 1: Calculate initial widths from suggestions
+    widths =
+      Enum.map(columns, fn column ->
+        case column.width do
+          pct when is_float(pct) and pct > 0 and pct <= 1 ->
+            # Percentage width: multiply by total_width
+            pct * total_width
+
+          fixed when is_number(fixed) and fixed > 1 ->
+            # Fixed width: use as-is
+            fixed
+
+          _ ->
+            # No suggestion: mark as nil for equal distribution
+            nil
+        end
+      end)
+
+    # For columns with nil width (no suggestion), distribute remaining space equally
+    # This gives flexible columns a fair starting point
+    {suggested_total, nil_count} =
+      Enum.reduce(widths, {0, 0}, fn width, {total, nil_count} ->
+        if is_nil(width) do
+          {total, nil_count + 1}
+        else
+          {total + width, nil_count}
+        end
+      end)
+
+    # Distribute remaining space equally among nil-width columns
+    # But only if we have space remaining (suggested_total might exceed total_width, which will be handled by scaling)
+    widths =
+      if nil_count > 0 do
+        remaining = max(0, total_width - suggested_total)
+        equal_width = if remaining > 0, do: remaining / nil_count, else: 0
+
+        Enum.map(widths, fn width ->
+          if is_nil(width), do: equal_width, else: width
+        end)
+      else
+        widths
+      end
+
+    # Phase 2: Iterative proportional scaling
+    # Keep scaling until total <= total_width, excluding columns at minimum
+    final_widths = scale_to_fit(widths, columns, total_width)
+
+    columns
+    |> Enum.zip(final_widths)
+    |> Enum.map(fn {column, width} ->
+      # Round to 3 decimal places for consistency
+      rounded_width = if is_float(width), do: Float.round(width, 3), else: width
+      %{column | width: rounded_width}
+    end)
+  end
+
+  defp scale_to_fit(widths, columns, total_width) do
+    scale_to_fit_iter(widths, columns, total_width, 0)
+  end
+
+  defp scale_to_fit_iter(widths, columns, total_width, iteration) do
+    # Prevent infinite recursion (max 10 iterations should be enough)
+    if iteration >= 10 do
+      widths
+    else
+      # Ensure all columns meet calculated_min_width first
+      widths =
+        Enum.zip_with([widths, columns], fn [width, col] ->
+          min_width = col.calculated_min_width || 0
+          max(width, min_width)
+        end)
+
+      total = Enum.sum(widths)
+
+      if total <= total_width do
+        # Already fits
+        widths
+      else
+        # Scale down proportionally, excluding columns at minimum
+        # Build a list of {index, width, column} tuples to track positions
+        indexed = Enum.with_index(Enum.zip(widths, columns))
+
+        # Separate scalable and fixed columns
+        {scalable, fixed_map} =
+          Enum.reduce(indexed, {[], %{}}, fn {{width, col}, idx}, {scalable_acc, fixed_acc} ->
+            min_width = col.calculated_min_width || 0
+            # Add small epsilon to avoid floating point issues
+            if width > min_width + 0.01 do
+              {[{idx, width, col} | scalable_acc], fixed_acc}
+            else
+              {scalable_acc, Map.put(fixed_acc, idx, width)}
+            end
+          end)
+
+        if length(scalable) == 0 do
+          # All at minimum - check if exceeds total (error case)
+          min_total = Enum.sum(widths)
+
+          if min_total > total_width do
+            raise "Impossible constraint: sum of calculated_min_widths (#{min_total}) exceeds total_width (#{total_width})"
+          end
+
+          widths
+        else
+          # Calculate how much we need to shrink
+          fixed_total = Enum.reduce(fixed_map, 0, fn {_idx, width}, acc -> acc + width end)
+          available_for_scalable = total_width - fixed_total
+
+          if available_for_scalable <= 0 do
+            # No space available for scalable columns - set them all to minimum
+            Enum.map(0..(length(widths) - 1), fn idx ->
+              if Map.has_key?(fixed_map, idx) do
+                Map.get(fixed_map, idx)
+              else
+                col = Enum.at(columns, idx)
+                col.calculated_min_width || 0
+              end
+            end)
+          else
+            scalable_total =
+              Enum.reduce(scalable, 0, fn {_idx, width, _col}, acc -> acc + width end)
+
+            scale_factor = available_for_scalable / scalable_total
+
+            # Apply scaling to scalable columns
+            scaled_map =
+              Enum.reduce(scalable, %{}, fn {idx, width, _col}, acc ->
+                scaled = width * scale_factor
+                # Ensure scaled width doesn't go below minimum
+                col = Enum.at(columns, idx)
+                min_width = col.calculated_min_width || 0
+                Map.put(acc, idx, max(scaled, min_width))
+              end)
+
+            # Rebuild widths list in original order
+            new_widths =
+              Enum.map(0..(length(widths) - 1), fn idx ->
+                cond do
+                  Map.has_key?(fixed_map, idx) -> Map.get(fixed_map, idx)
+                  Map.has_key?(scaled_map, idx) -> Map.get(scaled_map, idx)
+                  true -> Enum.at(widths, idx)
+                end
+              end)
+
+            # Recursively check if we need another iteration
+            scale_to_fit_iter(new_widths, columns, total_width, iteration + 1)
+          end
+        end
+      end
+    end
   end
 
   defp set_col_dimensions(data, {x, _y}, {width, _height}, col_opts) do
@@ -304,12 +941,10 @@ defmodule Pdf.Table do
   end
 
   defp overflow_lines(lines, max_height) do
+    filtered = filter_empty_lines(lines)
+
     {lines, overflow} =
-      lines
-      |> Enum.reject(fn
-        {:line, []} -> true
-        _ -> false
-      end)
+      filtered
       |> Enum.map_reduce(0, fn {:line, line}, acc ->
         line_height = Enum.max(Enum.map(line, &Keyword.get(elem(&1, 2), :height)))
         {{:line, line, line_height + acc}, line_height + acc}
@@ -342,9 +977,11 @@ defmodule Pdf.Table do
         col_opts
       )
 
+    border_color = Keyword.get(col_opts, :border_color)
+
     page
     |> Page.restore_state()
-    |> draw_border({x, y}, {width, row_height}, border(col_opts))
+    |> draw_border({x, y}, {width, row_height}, border(col_opts), border_color)
     |> draw_row(y, row_height, tail)
   end
 
@@ -365,77 +1002,77 @@ defmodule Pdf.Table do
     |> Page.clip()
   end
 
+  defp draw_border(page, xy, wh, border, nil) do
+    draw_border(page, xy, wh, border)
+  end
+
+  defp draw_border(page, xy, wh, border, border_color) do
+    page
+    |> Page.save_state()
+    |> Page.set_stroke_color(border_color)
+    |> draw_border(xy, wh, border)
+    |> Page.restore_state()
+  end
+
   defp draw_border(page, {x, y}, {w, h}, {bt, br, bb, bl} = border) do
     page
-    |> draw_top_border({x, y}, {w, h}, bt)
-    |> draw_right_border({x, y}, {w, h}, br)
-    |> draw_bottom_border({x, y}, {w, h}, bb)
-    |> draw_left_border({x, y}, {w, h}, bl)
+    |> draw_border_side({x, y}, {w, h}, :top, bt)
+    |> draw_border_side({x, y}, {w, h}, :right, br)
+    |> draw_border_side({x, y}, {w, h}, :bottom, bb)
+    |> draw_border_side({x, y}, {w, h}, :left, bl)
     |> stroke_border(border)
   end
 
   defp stroke_border(page, {0, 0, 0, 0}), do: page
   defp stroke_border(page, _border), do: Page.stroke(page)
 
-  defp draw_top_border(page, _xy, _wh, 0), do: page
+  defp draw_border_side(page, _xy, _wh, _side, 0), do: page
 
-  defp draw_top_border(page, {x, y}, {w, h}, width) do
+  defp draw_border_side(page, {x, y}, {w, h}, :top, width) do
     page
     |> Page.set_line_width(width)
     |> Page.line({x, y + h}, {x + w, y + h})
   end
 
-  defp draw_right_border(page, _xy, _wh, 0), do: page
-
-  defp draw_right_border(page, {x, y}, {w, h}, width) do
+  defp draw_border_side(page, {x, y}, {w, h}, :right, width) do
     page
     |> Page.set_line_width(width)
     |> Page.line({x + w, y + h}, {x + w, y})
   end
 
-  defp draw_bottom_border(page, _xy, _wh, 0), do: page
-
-  defp draw_bottom_border(page, {x, y}, {w, _h}, width) do
+  defp draw_border_side(page, {x, y}, {w, _h}, :bottom, width) do
     page
     |> Page.set_line_width(width)
     |> Page.line({x, y}, {x + w, y})
   end
 
-  defp draw_left_border(page, _xy, _wh, 0), do: page
-
-  defp draw_left_border(page, {x, y}, {_w, h}, width) do
+  defp draw_border_side(page, {x, y}, {_w, h}, :left, width) do
     page
     |> Page.set_line_width(width)
     |> Page.line({x, y + h}, {x, y})
   end
 
-  defp col_height({_, col_opts}) do
+  defp col_height({_, col_opts}), do: col_height_from_opts(col_opts)
+  defp col_height({_, _, col_opts}), do: col_height_from_opts(col_opts)
+
+  defp col_height_from_opts(col_opts) do
     {pt, _pr, pb, _pl} = padding(col_opts)
     height = Keyword.get(col_opts, :height)
     height + pt + pb
   end
 
-  defp col_height({_, _, col_opts}) do
-    {pt, _pr, pb, _pl} = padding(col_opts)
-    height = Keyword.get(col_opts, :height)
-    height + pt + pb
-  end
-
+  # Convert padding/border values to 4-tuples for use in calculations
+  # This is used after merging, so nil values should be replaced with 0
   defp padding(nil), do: {0, 0, 0, 0}
   defp padding(opts) when is_list(opts), do: padding(Keyword.get(opts, :padding, 0))
-  defp padding(p) when is_number(p), do: {p, p, p, p}
-  defp padding({p}) when is_number(p), do: {p, p, p, p}
-  defp padding({py, px}), do: {py, px, py, px}
-  defp padding({pt, px, pb}), do: {pt, px, pb, px}
-  defp padding({pt, pr, pb, pl}), do: {pt, pr, pb, pl}
+
+  defp padding(value) do
+    normalize_tuple(value)
+  end
 
   defp border(nil), do: {0, 0, 0, 0}
   defp border(opts) when is_list(opts), do: border(Keyword.get(opts, :border, 0))
-  defp border(b) when is_number(b), do: {b, b, b, b}
-  defp border({b}) when is_number(b), do: {b, b, b, b}
-  defp border({by, bx}), do: {by, bx, by, bx}
-  defp border({bt, bx, bb}), do: {bt, bx, bb, bx}
-  defp border({bt, br, bb, bl}), do: {bt, br, bb, bl}
+  defp border(value), do: normalize_tuple(value)
 
   defp background(opts) when is_list(opts), do: Keyword.get(opts, :background)
 end
