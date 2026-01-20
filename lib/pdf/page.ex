@@ -12,10 +12,10 @@ defmodule Pdf.Page do
             saved: %{},
             saving_state: false
 
-  defdelegate table(page, data, xy, wh), to: Pdf.Table
-  defdelegate table(page, data, xy, wh, opts), to: Pdf.Table
-  defdelegate table!(page, data, xy, wh), to: Pdf.Table
-  defdelegate table!(page, data, xy, wh, opts), to: Pdf.Table
+  defdelegate table(page, data, xy, wh), to: Pdf.TableDeprecated
+  defdelegate table(page, data, xy, wh, opts), to: Pdf.TableDeprecated
+  defdelegate table!(page, data, xy, wh), to: Pdf.TableDeprecated
+  defdelegate table!(page, data, xy, wh, opts), to: Pdf.TableDeprecated
 
   import Pdf.Utils
   alias Pdf.{Image, Fonts, Stream, Text, Font}
