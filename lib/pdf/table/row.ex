@@ -4,35 +4,25 @@ defmodule Pdf.Table.Row do
   alias Pdf.Table.Cell
   alias __MODULE__
 
+  @text_styling_options [:color, :font_size, :bold, :italic, :kerning]
+
   @derive {Inspect,
            optional: [
              :cells,
              :background,
              :border,
              :border_color,
-             :color,
-             :padding,
-             :font_size,
-             :bold,
-             :italic,
-             :align,
-             :kerning
+             :padding
+             | @text_styling_options
            ]}
   defstruct [
-    :cells,
-    # Styling
-    :background,
-    :border,
-    :border_color,
-    :color,
-    :padding,
-    # Text styling
-    :font_size,
-    :bold,
-    :italic,
-    :align,
-    :kerning
-  ]
+              :cells,
+              # Styling
+              :background,
+              :border,
+              :border_color,
+              :padding
+            ] ++ @text_styling_options
 
   @type t :: %Row{
           cells: list(Cell.t()),
@@ -56,7 +46,6 @@ defmodule Pdf.Table.Row do
           font_size: number() | nil,
           bold: boolean() | nil,
           italic: boolean() | nil,
-          align: :left | :center | :right | nil,
           kerning: boolean() | nil
         }
 
@@ -86,7 +75,6 @@ defmodule Pdf.Table.Row do
   def put_font_size(%Row{} = row, font_size), do: %{row | font_size: font_size}
   def put_bold(%Row{} = row, bold), do: %{row | bold: bold}
   def put_italic(%Row{} = row, italic), do: %{row | italic: italic}
-  def put_align(%Row{} = row, align), do: %{row | align: align}
   def put_kerning(%Row{} = row, kerning), do: %{row | kerning: kerning}
 
   def update_cells(%Row{} = row, cells), do: %{row | cells: cells}

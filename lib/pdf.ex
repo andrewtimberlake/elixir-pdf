@@ -537,6 +537,11 @@ defmodule Pdf do
     {pid, result}
   end
 
+  def render_table!(pid, coords, dimensions, data) do
+    :complete = GenServer.call(pid, {:render_table, coords, dimensions, data})
+    pid
+  end
+
   @doc """
   Add a table in the document at the given coordinates.
 

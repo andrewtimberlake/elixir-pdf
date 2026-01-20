@@ -2,6 +2,7 @@ defmodule Pdf.Table.Column do
   @moduledoc false
 
   alias __MODULE__
+  @text_styling_options [:color, :font_size, :bold, :italic, :kerning]
 
   @derive {Inspect,
            optional: [
@@ -11,30 +12,23 @@ defmodule Pdf.Table.Column do
              :align,
              :padding,
              :background,
-             :color,
-             :font_size,
              :border,
              :border_color,
-             :bold,
-             :italic,
-             :kerning
+             :hide
+             | @text_styling_options
            ]}
   defstruct [
-    :width,
-    :max_width,
-    :min_width,
-    :calculated_min_width,
-    :align,
-    :padding,
-    :background,
-    :color,
-    :font_size,
-    :border,
-    :border_color,
-    :bold,
-    :italic,
-    :kerning
-  ]
+              :width,
+              :max_width,
+              :min_width,
+              :calculated_min_width,
+              :align,
+              :padding,
+              :background,
+              :border,
+              :border_color,
+              :hide
+            ] ++ @text_styling_options
 
   @type t :: %Column{
           width: number() | nil,
@@ -62,7 +56,8 @@ defmodule Pdf.Table.Column do
           border_color: atom() | tuple() | nil,
           bold: boolean() | nil,
           italic: boolean() | nil,
-          kerning: boolean() | nil
+          kerning: boolean() | nil,
+          hide: boolean() | nil
         }
 
   def new(opts \\ [])
@@ -94,4 +89,5 @@ defmodule Pdf.Table.Column do
   def put_bold(%Column{} = column, bold), do: %{column | bold: bold}
   def put_italic(%Column{} = column, italic), do: %{column | italic: italic}
   def put_kerning(%Column{} = column, kerning), do: %{column | kerning: kerning}
+  def put_hide(%Column{} = column, hide), do: %{column | hide: hide}
 end

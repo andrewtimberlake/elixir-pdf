@@ -2,6 +2,9 @@ defmodule Pdf.Table.Cell do
   @moduledoc false
 
   alias __MODULE__
+  alias Pdf.Table.Column
+
+  @text_styling_options [:color, :font_size, :bold, :italic, :kerning]
 
   @derive {Inspect,
            except: [:chunks],
@@ -12,32 +15,22 @@ defmodule Pdf.Table.Cell do
              :border,
              :border_color,
              :background,
-             :color,
-             :font_size,
-             :bold,
-             :italic,
-             :align,
-             :kerning
+             :align
+             | @text_styling_options
            ]}
   defstruct [
-    # Content
-    :data,
-    :chunks,
-    # Layout
-    :colspan,
-    # Styling
-    :padding,
-    :border,
-    :border_color,
-    :background,
-    :color,
-    # Text styling
-    :font_size,
-    :bold,
-    :italic,
-    :align,
-    :kerning
-  ]
+              # Content
+              :data,
+              :chunks,
+              # Layout
+              :colspan,
+              # Styling
+              :padding,
+              :border,
+              :border_color,
+              :background,
+              :align
+            ] ++ @text_styling_options
 
   @type t :: %Cell{
           data: any(),
@@ -82,6 +75,93 @@ defmodule Pdf.Table.Cell do
         _ -> cell
       end
     end)
+  end
+
+  def inherit_options(%Cell{} = cell, %Column{} = column) do
+    cell
+    |> inherit_text_options(column)
+    |> inherit_column_options(column)
+    |> inherit_perimeter_options(column)
+  end
+
+  def inherit_options(%Cell{} = cell, parent) do
+    inherit_text_options(cell, parent)
+  end
+
+  defp inherit_text_options(%Cell{} = cell, parent) do
+    Enum.reduce(@text_styling_options, cell, fn option, cell ->
+      case cell do
+        %{^option => nil} ->
+          %{^option => inherited_option} = parent
+          %{cell | option => inherited_option}
+
+        _ ->
+          cell
+      end
+    end)
+  end
+
+  defp inherit_column_options(%Cell{} = cell, %Column{} = parent) do
+    Enum.reduce(
+      [
+        :width,
+        :max_width,
+        :min_width,
+        :align,
+        :background
+      ],
+      cell,
+      fn option, cell ->
+        case cell do
+          %{^option => nil} ->
+            %{^option => inherited_option} = parent
+            %{cell | option => inherited_option}
+
+          _ ->
+            cell
+        end
+      end
+    )
+  end
+
+  defp inherit_perimeter_options(%Cell{} = cell, %Column{} = parent) do
+    Enum.reduce(
+      [
+        {:padding, 0},
+        {:border, 0},
+        {:border_color, nil}
+      ],
+      cell,
+      fn {option, default}, cell ->
+        %{^option => cell_value} = cell
+        normalized_cell_value = normalize_perimeter_tuple(cell_value, nil)
+        %{^option => parent_value} = parent
+        normalized_parent_value = normalize_perimeter_tuple(parent_value, default)
+        merged_value = merge_tuples(normalized_cell_value, normalized_parent_value)
+        %{cell | option => merged_value}
+      end
+    )
+  end
+
+  def normalize_perimeter_tuple(value, default \\ 0)
+  def normalize_perimeter_tuple(nil, default), do: {default, default, default, default}
+  def normalize_perimeter_tuple({nil}, default), do: {default, default, default, default}
+  def normalize_perimeter_tuple({all}, _default), do: {all, all, all, all}
+  def normalize_perimeter_tuple({tb, lr}, _default), do: {tb, lr, tb, lr}
+  def normalize_perimeter_tuple({t, lr, b}, _default), do: {t, lr, b, lr}
+  def normalize_perimeter_tuple({t, r, b, l}, _default), do: {t, r, b, l}
+  def normalize_perimeter_tuple(all, _default), do: {all, all, all, all}
+
+  def merge_tuples({t, r, b, l}, {pt, pr, pb, pl}),
+    do: {t || pt, r || pr, b || pb, l || pl}
+
+  def text_opts(%Cell{} = cell) do
+    @text_styling_options
+    |> Enum.map(fn option ->
+      %{^option => value} = cell
+      {option, value}
+    end)
+    |> Enum.reject(fn {_option, value} -> value == nil end)
   end
 
   def put_colspan(%Cell{} = cell, colspan), do: %{cell | colspan: colspan}

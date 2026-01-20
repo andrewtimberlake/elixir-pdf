@@ -4,6 +4,8 @@ defmodule Pdf.Table.Table do
   alias Pdf.Table.{Row, Column}
   alias __MODULE__
 
+  @text_styling_options [:color, :font_size, :bold, :italic, :kerning]
+
   @derive {Inspect,
            optional: [
              :rows,
@@ -14,34 +16,22 @@ defmodule Pdf.Table.Table do
              :padding,
              :border,
              :border_color,
-             :background,
-             :color,
-             :font_size,
-             :bold,
-             :italic,
-             :align,
-             :kerning
+             :background
+             | @text_styling_options
            ]}
   defstruct [
-    :rows,
-    :columns,
-    # Table-specific opts
-    :repeat_header,
-    :allow_row_overflow,
-    :encoding_replacement_character,
-    # General styling opts (can apply to table, rows, and cells)
-    :padding,
-    :border,
-    :border_color,
-    :background,
-    :color,
-    # Text styling opts
-    :font_size,
-    :bold,
-    :italic,
-    :align,
-    :kerning
-  ]
+              :rows,
+              :columns,
+              # Table-specific opts
+              :repeat_header,
+              :allow_row_overflow,
+              :encoding_replacement_character,
+              # General styling opts (can apply to table, rows, and cells)
+              :padding,
+              :border,
+              :border_color,
+              :background
+            ] ++ @text_styling_options
 
   @type t :: %Table{
           rows: list(Row.t()),
@@ -69,7 +59,6 @@ defmodule Pdf.Table.Table do
           font_size: number() | nil,
           bold: boolean() | nil,
           italic: boolean() | nil,
-          align: :left | :center | :right | nil,
           kerning: boolean() | nil
         }
 
@@ -101,7 +90,10 @@ defmodule Pdf.Table.Table do
     end)
   end
 
-  def add_row(%Table{} = table, row, opts \\ []) do
+  def add_row(table, row, opts \\ [])
+  def add_row(%Table{} = table, [], _opts), do: table
+
+  def add_row(%Table{} = table, row, opts) do
     %{table | rows: [Row.new(row, opts) | table.rows]}
   end
 

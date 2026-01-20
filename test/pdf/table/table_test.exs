@@ -207,12 +207,11 @@ defmodule Pdf.Table.TableTest do
             # [Cell.new("test", colspan: 3), "10.00"]
           ],
           columns: [
-            %Column{width: 0.8, calculated_min_width: 68.012},
-            %Column{min_width: 40, align: :right, calculated_min_width: 52.688},
-            %Column{min_width: 40, align: :right, calculated_min_width: 40},
-            %Column{min_width: 40, align: :right, calculated_min_width: 49.352}
-          ],
-          padding: 4
+            %Column{width: 0.8, padding: 4},
+            %Column{min_width: 40, align: :right, padding: 4},
+            %Column{min_width: 40, align: :right, padding: 4},
+            %Column{min_width: 40, align: :right, padding: 4}
+          ]
         )
 
       table = Pdf.Table.prepare(page, table, 500)
@@ -332,7 +331,7 @@ defmodule Pdf.Table.TableTest do
         %Column{width: 100, calculated_min_width: 0}
       ]
 
-      result = Pdf.Table.distribute_column_widths(columns, 1000)
+      result = Pdf.Table.distribute_column_widths(columns, 600)
 
       [col1, col2, col3] = result
       assert col1.width == 300.0

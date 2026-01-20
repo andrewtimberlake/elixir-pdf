@@ -111,7 +111,7 @@ defmodule Pdf.Images.PNG do
   defp extract_scan_lines(<<>>, _line_length), do: []
 
   defp extract_scan_lines(image_data, line_length) do
-    <<filter::unsigned-8, line::binary-size(line_length), rest::binary>> = image_data
+    <<filter::unsigned-8, line::binary-size(^line_length), rest::binary>> = image_data
     [{filter, line} | extract_scan_lines(rest, line_length)]
   end
 
@@ -140,7 +140,7 @@ defmodule Pdf.Images.PNG do
   defp breakout_line(_sizes, "", color_data, alpha_data), do: {color_data, alpha_data}
 
   defp breakout_line({color_bytes, alpha_bytes}, line, color_data, alpha_data) do
-    <<color::binary-size(color_bytes), alpha::binary-size(alpha_bytes), rest::binary>> = line
+    <<color::binary-size(^color_bytes), alpha::binary-size(^alpha_bytes), rest::binary>> = line
 
     breakout_line(
       {color_bytes, alpha_bytes},
