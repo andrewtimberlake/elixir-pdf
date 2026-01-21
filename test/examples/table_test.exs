@@ -3,7 +3,8 @@ defmodule Pdf.Examples.TableTest do
 
   @open true
 
-  alias Pdf.Table.{Table, Row, Cell, Column}
+  alias Pdf.Table
+  alias Table.{Row, Cell, Column}
 
   test "" do
     data = [
@@ -229,8 +230,6 @@ defmodule Pdf.Examples.TableTest do
   end
 
   test "generate invoice table style 2" do
-    alias Pdf.Table.{Table, Row, Cell, Column}
-
     table =
       Table.new(
         [

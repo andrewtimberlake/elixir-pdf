@@ -206,7 +206,19 @@ defmodule Pdf do
   end
 
   @doc """
+  Add a new page to the Pdf with the current page size.
+
+  The new page will inherit the font from the current page, if set.
+  """
+  def add_page(pid) do
+    :ok = GenServer.call(pid, :add_page)
+    pid
+  end
+
+  @doc """
   Add a new page to the Pdf with the given page size.
+
+  The new page will inherit the font from the current page, if set.
   """
   def add_page(pid, size) do
     :ok = GenServer.call(pid, {:add_page, size})
@@ -283,6 +295,32 @@ defmodule Pdf do
   @spec rectangle(pid, coords, dimension) :: pid
   def rectangle(pid, coords, dimensions) do
     :ok = GenServer.call(pid, {:rectangle, coords, dimensions})
+    pid
+  end
+
+  @doc """
+  Add a clickable link annotation to the current page.
+
+  The coordinates `{x, y}` are the lower-left corner of the link rectangle.
+  The dimensions `{w, h}` are the width and height of the rectangle.
+  """
+  @spec link(pid, coords, dimension, binary) :: pid
+  def link(pid, coords, dimensions, uri) when is_binary(uri) or is_struct(uri, URI) do
+    :ok = GenServer.call(pid, {:link, coords, dimensions, to_string(uri)})
+    pid
+  end
+
+  @doc """
+  Add a clickable link annotation to a specific page number in the document.
+
+  The coordinates `{x, y}` are the lower-left corner of the link rectangle.
+  The dimensions `{w, h}` are the width and height of the rectangle.
+
+  If the specified page number does not exist when rendering, the link is silently dropped.
+  """
+  @spec link_to_page(pid, coords, dimension, integer) :: pid
+  def link_to_page(pid, coords, dimensions, page_number) when is_integer(page_number) do
+    :ok = GenServer.call(pid, {:link_to_page, coords, dimensions, page_number})
     pid
   end
 
@@ -532,13 +570,19 @@ defmodule Pdf do
     end
   end
 
-  def render_table(pid, coords, dimensions, data) do
-    result = GenServer.call(pid, {:render_table, coords, dimensions, data})
+  @doc """
+  Render a table in the document at the given coordinates.
+  """
+  @type table :: Pdf.Table.t()
+  @type continuation :: {:continue, Pdf.Table.t()}
+  @spec render_table(pid, coords(), dimension(), table) :: {pid, :complete | continuation}
+  def render_table(pid, coords, dimensions, table) do
+    result = GenServer.call(pid, {:render_table, coords, dimensions, table})
     {pid, result}
   end
 
-  def render_table!(pid, coords, dimensions, data) do
-    :complete = GenServer.call(pid, {:render_table, coords, dimensions, data})
+  def render_table!(pid, coords, dimensions, table) do
+    :complete = GenServer.call(pid, {:render_table, coords, dimensions, table})
     pid
   end
 
@@ -735,6 +779,10 @@ defmodule Pdf do
       {:reply, :binary.list_to_bin(Document.to_iolist(document)), document}
     end
 
+    def handle_call(:add_page, _from, document) do
+      {:reply, :ok, Document.add_page(document)}
+    end
+
     def handle_call({:add_page, size}, _from, document) do
       {:reply, :ok, Document.add_page(document, size: size)}
     end
@@ -765,6 +813,14 @@ defmodule Pdf do
 
     def handle_call({:rectangle, coords, dimensions}, _from, document) do
       {:reply, :ok, Document.rectangle(document, coords, dimensions)}
+    end
+
+    def handle_call({:link, coords, dimensions, uri}, _from, document) do
+      {:reply, :ok, Document.link(document, coords, dimensions, uri)}
+    end
+
+    def handle_call({:link_to_page, coords, dimensions, page_number}, _from, document) do
+      {:reply, :ok, Document.link_to_page(document, coords, dimensions, page_number)}
     end
 
     def handle_call({:line, coords, coords_to}, _from, document) do

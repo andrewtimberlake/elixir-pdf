@@ -25,6 +25,7 @@ defmodule Pdf.Text do
   def chunk_text(string, font, font_size, opts \\ []) do
     whitespace = " \t#{@zero_width_space}\n"
     break_chars = " \t\n\v\r#{@zero_width_space}#{@soft_hyphen}#{@hyphen}"
+
     [
       "([^#{break_chars}]+)(#{@soft_hyphen})",
       "([^#{break_chars}]+#{@hyphen}+)",

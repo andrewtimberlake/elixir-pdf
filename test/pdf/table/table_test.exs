@@ -1,7 +1,7 @@
-defmodule Pdf.Table.TableTest do
+defmodule Pdf.TableTest do
   use Pdf.Case, async: true
 
-  alias Pdf.Table.Table
+  alias Pdf.Table
   alias Pdf.Table.Row
   alias Pdf.Table.Cell
   alias Pdf.Table.Column
@@ -508,7 +508,7 @@ defmodule Pdf.Table.TableTest do
     test "it does nothing with an empty data list", %{page: page} do
       table = Table.new([])
       table = Pdf.Table.prepare(page, table, 500)
-      {page, []} = Pdf.Table.render(page, {20, 600}, {500, 500}, table)
+      {page, :complete} = Pdf.Table.render(page, {20, 600}, {500, 500}, table)
 
       assert export(page) == "\n"
     end
@@ -535,6 +535,7 @@ defmodule Pdf.Table.TableTest do
              /F1 12 Tf
              20 590.934 Td
              (Col 1,1) Tj
+             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -544,6 +545,7 @@ defmodule Pdf.Table.TableTest do
              /F1 12 Tf
              120.0 590.934 Td
              (Col 1,2) Tj
+             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -553,6 +555,7 @@ defmodule Pdf.Table.TableTest do
              /F1 12 Tf
              220.0 590.934 Td
              (Col 1,3) Tj
+             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -562,6 +565,7 @@ defmodule Pdf.Table.TableTest do
              /F1 12 Tf
              20 578.934 Td
              (Col 2,1) Tj
+             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -571,6 +575,7 @@ defmodule Pdf.Table.TableTest do
              /F1 12 Tf
              120.0 578.934 Td
              (Col 2,2) Tj
+             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -580,6 +585,7 @@ defmodule Pdf.Table.TableTest do
              /F1 12 Tf
              220.0 578.934 Td
              (Col 2,3) Tj
+             0.0 0.0 0.0 rg
              ET
              Q
              """
@@ -606,7 +612,7 @@ defmodule Pdf.Table.TableTest do
 
       result = Pdf.Table.render(page, {10, 90}, {80, 80}, table)
 
-      assert {_page, {:continue, %Pdf.Table.Table{rows: [%Pdf.Table.Row{cells: cells}]}}} = result
+      assert {_page, {:continue, %Pdf.Table{rows: [%Pdf.Table.Row{cells: cells}]}}} = result
 
       # Verify we have 3 cells with chunks
       assert length(cells) == 3
@@ -635,8 +641,8 @@ defmodule Pdf.Table.TableTest do
       result = Pdf.Table.render(page, {10, 90}, {80, 80}, table)
 
       assert {_page,
-              {:continue,
-               %Pdf.Table.Table{rows: [%Pdf.Table.Row{cells: cells}]} = continued_table}} = result
+              {:continue, %Pdf.Table{rows: [%Pdf.Table.Row{cells: cells}]} = continued_table}} =
+               result
 
       # Verify overflow cell has chunks (some cells might be nil)
       assert length(cells) == 3

@@ -454,4 +454,89 @@ defmodule Pdf.PageTest do
       end
     end
   end
+
+  describe "link/3" do
+    test "it adds a link annotation to the page", %{page: page} do
+      page = Page.link(page, {10, 20}, {200, 100}, "https://example.com")
+
+      assert length(page.links) == 1
+      [link] = page.links
+      assert link == %{x: 10, y: 20, w: 200, h: 100, target: {:uri, "https://example.com"}}
+    end
+
+    test "it creates correct annotation dictionary for URI link", %{page: page} do
+      {:ok, collection} = ObjectCollection.start_link()
+      page = Page.link(page, {10, 20}, {200, 100}, "https://example.com")
+
+      annot_refs = Page.create_annotations(page, collection, %{})
+      assert length(annot_refs) == 1
+
+      annot_dict = ObjectCollection.get_object(collection, hd(annot_refs))
+      assert Map.get(annot_dict.entries, {:name, "Type"}) == {:name, "Annot"}
+      assert Map.get(annot_dict.entries, {:name, "Subtype"}) == {:name, "Link"}
+
+      assert Map.get(annot_dict.entries, {:name, "Rect"}) == %Pdf.Array{
+               values: [10, 20, 210, 120]
+             }
+
+      assert Map.get(annot_dict.entries, {:name, "Border"}) == %Pdf.Array{values: [0, 0, 0]}
+
+      action = Map.get(annot_dict.entries, {:name, "A"})
+      assert Map.get(action.entries, {:name, "Type"}) == {:name, "Action"}
+      assert Map.get(action.entries, {:name, "S"}) == {:name, "URI"}
+      assert Map.get(action.entries, {:name, "URI"}) == {:string, "https://example.com"}
+    end
+
+    test "it creates correct annotation dictionary for page link", %{page: page} do
+      {:ok, collection} = ObjectCollection.start_link()
+      page_ref = ObjectCollection.create_object(collection, Pdf.Dictionary.new(%{}))
+      page_ref_map = %{1 => page_ref}
+
+      page = Page.link_to_page(page, {50, 100}, {40, 20}, 1)
+
+      annot_refs = Page.create_annotations(page, collection, page_ref_map)
+      assert length(annot_refs) == 1
+
+      annot_dict = ObjectCollection.get_object(collection, hd(annot_refs))
+      assert Map.get(annot_dict.entries, {:name, "Type"}) == {:name, "Annot"}
+      assert Map.get(annot_dict.entries, {:name, "Subtype"}) == {:name, "Link"}
+
+      assert Map.get(annot_dict.entries, {:name, "Rect"}) == %Pdf.Array{
+               values: [50, 100, 90, 120]
+             }
+
+      action = Map.get(annot_dict.entries, {:name, "A"})
+      assert Map.get(action.entries, {:name, "Type"}) == {:name, "Action"}
+      assert Map.get(action.entries, {:name, "S"}) == {:name, "GoTo"}
+      dest = Map.get(action.entries, {:name, "D"})
+      assert dest.values == [page_ref, {:name, "Fit"}]
+    end
+
+    test "it drops page link annotation if target page doesn't exist", %{page: page} do
+      {:ok, collection} = ObjectCollection.start_link()
+      page = Page.link_to_page(page, {10, 20}, {200, 100}, 999)
+
+      annot_refs = Page.create_annotations(page, collection, %{})
+      assert annot_refs == []
+    end
+
+    test "it handles multiple links", %{page: page} do
+      {:ok, collection} = ObjectCollection.start_link()
+
+      page =
+        page
+        |> Page.link({10, 20}, {200, 100}, "https://example.com")
+        |> Page.link({50, 100}, {150, 50}, "https://hexdocs.pm")
+
+      assert length(page.links) == 2
+
+      annot_refs = Page.create_annotations(page, collection, %{})
+      assert length(annot_refs) == 2
+    end
+
+    test "it returns empty list when page has no links", %{page: page} do
+      {:ok, collection} = ObjectCollection.start_link()
+      assert Page.create_annotations(page, collection, %{}) == []
+    end
+  end
 end
