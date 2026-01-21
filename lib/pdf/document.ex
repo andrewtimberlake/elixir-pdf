@@ -22,6 +22,7 @@ defmodule Pdf.Document do
     ObjectCollection,
     Page,
     Paper,
+    ImageRef,
     Image,
     Text
   }
@@ -119,7 +120,9 @@ defmodule Pdf.Document do
     {:text_lines, quote(do: [{x, y}, lines, opts])},
     {:stroke, []},
     {:fill, []},
-    {:move_down, quote(do: [amount])}
+    {:move_down, quote(do: [amount])},
+    {:save_state, []},
+    {:restore_state, []}
   ]
   |> Enum.map(fn {func_name, args} ->
     def unquote(func_name)(%__MODULE__{current: page} = document, unquote_splicing(args)) do
@@ -171,39 +174,74 @@ defmodule Pdf.Document do
 
   def text_lines(document, xy, lines), do: text_lines(document, xy, lines, [])
 
+  def create_image(document, {:binary, image_data}) do
+    md5 = :erlang.md5(image_data)
+    get_or_create_image(document, md5, {:binary, image_data})
+  end
+
+  def create_image(document, image_path) do
+    get_or_create_image(document, image_path, image_path)
+  end
+
+  defp get_or_create_image(document, image_key, image_data) do
+    %{images: images} = document
+
+    case Map.get(images, image_key) do
+      nil ->
+        image_ref = create_image_ref(document, image_data)
+        image = Image.new(image_ref)
+        {image, %{document | images: Map.put_new(images, image_key, image_ref)}}
+
+      image_ref ->
+        {Image.new(image_ref), document}
+    end
+  end
+
+  def draw_image(document, xy, %Image{} = image, opts) do
+    %{document | current: Page.draw_image(document.current, xy, image, opts)}
+  end
+
   def add_image(document, xy, image, opts \\ [])
+
+  def add_image(document, xy, %Image{} = image, opts) do
+    %{document | current: Page.add_image(document.current, xy, image, opts)}
+  end
 
   def add_image(document, {x, y}, {:binary, image_data}, opts) do
     md5 = :erlang.md5(image_data)
-    add_or_create_image(document, {x, y}, md5, {:binary, image_data}, opts)
+    {_image, document} = add_or_create_image(document, {x, y}, md5, {:binary, image_data}, opts)
+    document
   end
 
   def add_image(document, {x, y}, image_path, opts) do
-    add_or_create_image(document, {x, y}, image_path, image_path, opts)
+    {_image, document} = add_or_create_image(document, {x, y}, image_path, image_path, opts)
+    document
   end
 
   defp add_or_create_image(%__MODULE__{current: page} = document, {x, y}, image_key, image, opts) do
-    image =
-      case Map.get(document.images, image_key) do
-        nil ->
-          create_image(document, image)
+    case Map.get(document.images, image_key) do
+      nil ->
+        image_ref = create_image_ref(document, image)
+        image = Image.new(image_ref)
 
-        image ->
-          image
-      end
+        document = %{
+          document
+          | current: Page.add_image(page, {x, y}, image_ref, opts),
+            images: Map.put_new(document.images, image_key, image_ref)
+        }
 
-    %{
-      document
-      | current: Page.add_image(page, {x, y}, image, opts),
-        images: Map.put_new(document.images, image_key, image)
-    }
+        {image, document}
+
+      image ->
+        {image, document}
+    end
   end
 
-  defp create_image(%{objects: objects, images: images}, image_path) do
-    image = Image.new(image_path, objects)
-    object = ObjectCollection.create_object(objects, image)
+  defp create_image_ref(%{objects: objects, images: images}, image_path) do
+    image_ref = ImageRef.new(image_path, objects)
+    object = ObjectCollection.create_object(objects, image_ref)
     name = n("I#{Kernel.map_size(images) + 1}")
-    %{name: name, object: object, image: image}
+    %{image_ref | name: name, object: object}
   end
 
   def add_external_font(%{fonts: fonts} = document, path) do
@@ -330,7 +368,7 @@ defmodule Pdf.Document do
 
   defp xobject_dictionary(images) do
     images
-    |> Enum.reduce(%{}, fn {_name, %{name: name, object: reference}}, map ->
+    |> Enum.reduce(%{}, fn {_image_key, %Pdf.ImageRef{name: name, object: reference}}, map ->
       Map.put(map, name, reference)
     end)
     |> Dictionary.new()

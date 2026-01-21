@@ -1,7 +1,7 @@
 defmodule Pdf.PageTest do
   use Pdf.Case, async: true
 
-  alias Pdf.{Page, Fonts, ObjectCollection}
+  alias Pdf.{Page, Fonts, ObjectCollection, ImageRef}
 
   setup do
     {:ok, collection} = ObjectCollection.start_link()
@@ -35,8 +35,8 @@ defmodule Pdf.PageTest do
 
   describe "add_image/4" do
     setup do
-      image = %{name: {:name, "I1"}, image: %Pdf.Image{width: 100, height: 50}}
-      {:ok, image: image}
+      image_ref = %ImageRef{name: {:name, "I1"}, width: 100, height: 50}
+      {:ok, image: image_ref}
     end
 
     test "it draws the image", %{page: page, image: image} do

@@ -18,7 +18,7 @@ defmodule Pdf.Page do
   defdelegate table!(page, data, xy, wh, opts), to: Pdf.TableDeprecated
 
   import Pdf.Utils
-  alias Pdf.{Image, Fonts, Stream, Text, Font}
+  alias Pdf.{Fonts, Stream, Text, Font, Image}
 
   def new(opts \\ [size: :a4]), do: init(opts, %__MODULE__{stream: Stream.new()})
 
@@ -486,8 +486,28 @@ defmodule Pdf.Page do
     |> end_text()
   end
 
+  def draw_image(page, {x, y}, %Image{} = image, opts) do
+    width = Keyword.get(opts, :width)
+    height = Keyword.get(opts, :height)
+
+    {width, height} =
+      case {width, height} do
+        {nil, nil} -> {image.width, image.height}
+        {width, nil} -> {width, Image.relative_height(image, width)}
+        {nil, height} -> {Image.relative_width(image, height), height}
+        {width, height} -> {width, height}
+      end
+
+    page
+    |> save_state()
+    |> push([width, 0, 0, height, x, y, "cm"])
+    |> push([image.name, "Do"])
+    |> restore_state()
+    |> set_cursor(y)
+  end
+
   def add_image(page, {x, y}, image, opts \\ []) do
-    %{name: image_name, image: %Image{width: width, height: height}} = image
+    %{name: image_name, width: width, height: height} = image
     scaled_width = Keyword.get(opts, :width, width) / width
     scaled_height = Keyword.get(opts, :height, height) / height
     width = Keyword.get(opts, :width, width * scaled_height)

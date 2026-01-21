@@ -7,6 +7,8 @@ defmodule PdfTest do
     file_path = output("qtest.pdf")
 
     Pdf.build([size: :a4, compress: false], fn pdf ->
+      rgb_image = Pdf.create_image(pdf, fixture("rgb.jpg"))
+
       pdf
       |> Pdf.set_info(
         title: "Test Document",
@@ -35,7 +37,7 @@ defmodule PdfTest do
         kerning: true
       )
       |> Pdf.text_lines({200, 300}, ["smile😀"], encoding_replacement_character: "")
-      |> Pdf.add_image({25, 50}, fixture("rgb.jpg"))
+      |> Pdf.draw_image({25, 50}, rgb_image)
       |> Pdf.add_image({175, 50}, fixture("cmyk.jpg"))
       |> Pdf.add_image({325, 50}, fixture("grayscale.jpg"))
       |> Pdf.add_image({200, 450}, fixture("grayscale.png"))

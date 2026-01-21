@@ -3,7 +3,7 @@ defmodule Pdf.Images.PNG do
 
   import Pdf.Utils
 
-  alias Pdf.{Image, Dictionary, Stream, ObjectCollection}
+  alias Pdf.{ImageRef, Dictionary, Stream, ObjectCollection}
 
   defstruct bit_depth: nil,
             height: nil,
@@ -156,7 +156,7 @@ defmodule Pdf.Images.PNG do
     extra = prepare_extra(image, objects)
 
     build_dictionary(
-      %Image{
+      %ImageRef{
         bits: bits,
         height: height,
         width: width,
@@ -282,7 +282,7 @@ defmodule Pdf.Images.PNG do
   defp get_colors(4), do: 1
   defp get_colors(6), do: 3
 
-  def build_dictionary(%Image{} = image, extra) do
+  def build_dictionary(%ImageRef{} = image, extra) do
     %{width: width, height: height, size: size} = image
 
     image_dic =

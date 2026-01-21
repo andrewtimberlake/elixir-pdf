@@ -407,7 +407,7 @@ defmodule Pdf do
 
   @doc """
   Writes the text at the given coordinates.
-  The coordinates are the bottom left of the text.
+  The coordinates are the bottom left of the text baseline.
 
   The _text_ can be either a binary or a list of binaries or annotated binaries.
   All text will be drawn on the same line, no wrapping will occur, it may overrun the page.
@@ -566,8 +566,41 @@ defmodule Pdf do
   end
 
   @doc """
+  Create an image from binary data. Only PNG and JPEG images are supported.
+  The image can be drawn with `draw_image/3`.
+  """
+  def create_image(pid, {:binary, image_data}) do
+    GenServer.call(pid, {:create_image, {:binary, image_data}})
+  end
+
+  def create_image(pid, image_path) do
+    GenServer.call(pid, {:create_image, image_path})
+  end
+
+  @doc """
+  Draw an image at the given coordinates.
+  The image should be previously created with `create_image/2`.
+
+  The image will be drawn with its bottom left corner at the given coordinates.
+
+  Options:
+    - `:width` (optional) the width to draw the image at
+    - `:height` (optional) the height to draw the image at
+
+  If only width or height is provided, the image will be scaled relative to the supplied dimension.
+  If neither is provided, the image will be drawn at its original size.
+
+  The cursor will be set to the y coordinate of the image
+  """
+  def draw_image(pid, coords, %Pdf.Image{} = image, opts \\ []) do
+    GenServer.call(pid, {:draw_image, coords, image, opts})
+    pid
+  end
+
+  @doc """
   Add an images (PNG, or JPEG only) at the given coordinates.
   """
+  @deprecated "Use create_image/2 and draw_image/3 instead"
   def add_image(pid, coords, image_path), do: add_image(pid, coords, image_path, [])
 
   @doc """
@@ -641,6 +674,16 @@ defmodule Pdf do
   Sets the title in the PDF information section.
   """
   def set_title(pid, title), do: set_info(pid, :title, title)
+
+  def save_state(pid) do
+    :ok = GenServer.call(pid, :save_state)
+    pid
+  end
+
+  def restore_state(pid) do
+    :ok = GenServer.call(pid, :restore_state)
+    pid
+  end
 
   @doc """
   Set multiple keys in the PDF information section.
@@ -819,6 +862,20 @@ defmodule Pdf do
       {:reply, :ok, document}
     end
 
+    def handle_call({:create_image, {:binary, image_data}}, _from, document) do
+      {image, document} = Document.create_image(document, {:binary, image_data})
+      {:reply, image, document}
+    end
+
+    def handle_call({:create_image, image_path}, _from, document) do
+      {image, document} = Document.create_image(document, image_path)
+      {:reply, image, document}
+    end
+
+    def handle_call({:draw_image, coords, image, opts}, _from, document) do
+      {:reply, :ok, Document.draw_image(document, coords, image, opts)}
+    end
+
     def handle_call({:add_image, coords, image_path, opts}, _from, document) do
       {:reply, :ok, Document.add_image(document, coords, image_path, opts)}
     end
@@ -845,6 +902,14 @@ defmodule Pdf do
 
     def handle_call({:set_info, key, value}, _from, document) do
       {:reply, :ok, Document.put_info(document, key, value)}
+    end
+
+    def handle_call(:save_state, _from, document) do
+      {:reply, :ok, Document.save_state(document)}
+    end
+
+    def handle_call(:restore_state, _from, document) do
+      {:reply, :ok, Document.restore_state(document)}
     end
 
     @impl GenServer
