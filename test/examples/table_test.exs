@@ -434,6 +434,119 @@ defmodule Pdf.Examples.TableTest do
     if @open, do: System.cmd("open", ["-g", file_path])
   end
 
+  test "table with many rows - page overflow (keep with previous)" do
+    # Create a table with many rows that will overflow to a new page
+    # Using a smaller height to force page breaks
+    table =
+      Table.new(
+        [
+          Row.new(
+            [
+              "Item #",
+              "Description",
+              "Quantity",
+              "Unit Price",
+              "Total"
+            ],
+            bold: true,
+            background: :gainsboro,
+            border: {0, 0, 1, 0}
+          )
+        ],
+        columns: [
+          %Column{padding: 4, border: 0.5, width: 60, align: :center},
+          %Column{padding: 4, border: 0.5, width: 200},
+          %Column{padding: 4, border: 0.5, width: 80, align: :right},
+          %Column{padding: 4, border: 0.5, width: 100, align: :right},
+          %Column{padding: 4, border: 0.5, width: 100, align: :right}
+        ],
+        repeat_header: 1,
+        border: 1
+      )
+      # Add many rows to force overflow
+      |> Table.add_rows(
+        Enum.map(1..24, fn i ->
+          [
+            "#{i}",
+            "Product #{i} - This is a longer description that might wrap",
+            "#{i * 2}",
+            "$#{i * 10}.00",
+            "$#{i * i * 20}.00"
+          ]
+        end)
+      )
+      # Add a footer row
+      |> Table.add_row(
+        Row.new(
+          [
+            Cell.new("Total", colspan: 4, align: :right),
+            Cell.new("$1,275,000.00")
+          ],
+          background: :light_gray,
+          bold: true,
+          border: {1, 0, 0, 0},
+          keep_with_previous: true
+        )
+      )
+
+    file_path = output("table_keep_with_previous.pdf")
+
+    {:ok, pdf} = Pdf.new(size: :a4, compress: false)
+
+    pdf =
+      pdf
+      |> Pdf.set_font("Helvetica", 10)
+      |> Pdf.set_fill_color(:black)
+      |> Pdf.set_line_cap(:square)
+      |> Pdf.set_line_join(:miter)
+
+    # First page - render with limited height to force overflow
+    {pdf, remaining} = Pdf.render_table(pdf, {50, 750}, {500, 700}, table)
+
+    # Continue rendering on new page(s) until complete
+    pdf =
+      case remaining do
+        :complete ->
+          pdf
+
+        {:continue, _continued_table} ->
+          # Add a new page and continue (re-set font and styles)
+          pdf =
+            pdf
+            |> Pdf.add_page(:a4)
+            |> Pdf.set_font("Helvetica", 10)
+            |> Pdf.set_fill_color(:black)
+            |> Pdf.set_line_cap(:square)
+            |> Pdf.set_line_join(:miter)
+
+          {pdf, remaining2} = Pdf.render_table(pdf, {50, 750}, {500, 700}, remaining)
+
+          case remaining2 do
+            :complete ->
+              pdf
+
+            {:continue, _continued_table2} ->
+              # Add another page if needed (re-set font and styles)
+              pdf =
+                pdf
+                |> Pdf.add_page(:a4)
+                |> Pdf.set_font("Helvetica", 10)
+                |> Pdf.set_fill_color(:black)
+                |> Pdf.set_line_cap(:square)
+                |> Pdf.set_line_join(:miter)
+
+              {pdf, :complete} = Pdf.render_table(pdf, {50, 750}, {500, 700}, remaining2)
+              pdf
+          end
+      end
+
+    pdf
+    |> Pdf.write_to(file_path)
+    |> Pdf.cleanup()
+
+    if @open, do: System.cmd("open", [file_path])
+  end
+
   test "invoice with hideable tax and discount columns" do
     # Create invoice table with tax and discount columns that can be hidden
     base_table =

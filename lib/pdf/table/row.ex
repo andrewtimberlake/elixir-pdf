@@ -21,7 +21,8 @@ defmodule Pdf.Table.Row do
               :background,
               :border,
               :border_color,
-              :padding
+              :padding,
+              :keep_with_previous
             ] ++ @text_styling_options
 
   @type t :: %Row{
@@ -46,7 +47,8 @@ defmodule Pdf.Table.Row do
           font_size: number() | nil,
           bold: boolean() | nil,
           italic: boolean() | nil,
-          kerning: boolean() | nil
+          kerning: boolean() | nil,
+          keep_with_previous: boolean() | nil
         }
 
   def new(row_or_cells, options \\ [])

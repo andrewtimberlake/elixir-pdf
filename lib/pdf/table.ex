@@ -176,10 +176,14 @@ defmodule Pdf.Table do
     {rows_to_render, remaining_rows, total_height} =
       calculate_rows_to_render(page, {w, h}, rows, table, x_starts)
 
+    # Second pass: Collect consecutive rows that have keep_with_previous: true
+    {rows_to_render, remaining_rows, total_height} =
+      collect_keep_with_previous_rows(rows_to_render, remaining_rows, total_height)
+
     # Determine bottom of visible table area
     table_bottom_y = y - total_height
 
-    # Second pass: Render the rows using pre-calculated heights
+    # Third pass: Render the rows using pre-calculated heights
     page =
       page
       |> render_rows({x, y}, rows_to_render, table, x_starts)
@@ -199,6 +203,31 @@ defmodule Pdf.Table do
       remaining_table = %{table | rows: header_rows ++ remaining_rows}
       {page, {:continue, remaining_table}}
     end
+  end
+
+  defp collect_keep_with_previous_rows(
+         rows_to_render,
+         [%Row{keep_with_previous: true} | _] = remaining_rows,
+         total_height
+       ) do
+    rows_to_render = Enum.reverse(rows_to_render)
+
+    {keep_rows, [keep_one | rows_to_render]} =
+      Enum.split_while(rows_to_render, fn row -> row.keep_with_previous end)
+
+    keep_rows = Enum.reverse(keep_rows ++ [keep_one])
+    rows_to_render = Enum.reverse(rows_to_render)
+
+    total_height =
+      Enum.reduce(keep_rows, total_height, fn row, acc ->
+        acc - (row.calculated_height || 0)
+      end)
+
+    {rows_to_render, keep_rows ++ remaining_rows, total_height}
+  end
+
+  defp collect_keep_with_previous_rows(rows_to_render, remaining_rows, total_height) do
+    {rows_to_render, remaining_rows, total_height}
   end
 
   # First pass: Calculate row heights and determine which rows fit
