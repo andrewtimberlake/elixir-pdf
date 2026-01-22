@@ -439,7 +439,8 @@ defmodule Pdf.Page do
     line_width = Enum.reduce(line, 0, fn {_, width, _}, acc -> width + acc end)
 
     line_height =
-      page.leading || line |> Enum.map(&Keyword.get(elem(&1, 2), :height)) |> Enum.max()
+      Keyword.get(opts, :leading, page.leading) ||
+        Enum.map(line, &Keyword.get(elem(&1, 2), :height)) |> Enum.max()
 
     if line_height > height do
       {:no_space, page, line_height}
