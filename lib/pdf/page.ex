@@ -788,10 +788,6 @@ defmodule Pdf.Page do
     [r, g, b, command]
   end
 
-  defp color_command({r, g, b}, command) when is_float(r) and is_float(g) and is_float(b) do
-    [r, g, b, command]
-  end
-
   defp color_command({c, m, y, k}, command)
        when is_float(c) and is_float(m) and is_float(y) and is_float(k) do
     [c, m, y, k, command]

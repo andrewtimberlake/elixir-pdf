@@ -271,12 +271,16 @@ defmodule Pdf.Document do
 
     if current_page do
       %{current_font: font, current_font_size: font_size} = current_page
-      pages = if(current_page, do: [current_page | document.pages], else: document.pages)
+      pages = [current_page | document.pages]
       document = %{document | current_page: new_page, pages: pages}
       set_font(document, font.module.name, font_size, [])
     else
       %{document | current_page: new_page}
     end
+  end
+
+  def remove_page(%__MODULE__{pages: [last_page | pages]} = document) do
+    %{document | current_page: last_page, pages: pages}
   end
 
   defp size_tuple(%{width: width, height: height}), do: {width, height}

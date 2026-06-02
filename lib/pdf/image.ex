@@ -16,10 +16,6 @@ defmodule Pdf.Image do
   end
 
   def relative_height(image, width) do
-    IO.inspect(width / image.width * image.height,
-      label: "#{width} / #{image.width} * #{image.height}"
-    )
-
     width / image.width * image.height
   end
 

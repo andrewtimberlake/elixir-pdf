@@ -226,6 +226,15 @@ defmodule Pdf do
   end
 
   @doc """
+  Remove the current page from the Pdf.
+  """
+  @spec remove_page(pid) :: pid
+  def remove_page(pid) do
+    :ok = GenServer.call(pid, :remove_page)
+    pid
+  end
+
+  @doc """
   Adds an autoprint action to the Pdf.
 
   This is can be useful for generating a PDF that will automatically open the print dialog in a browser
@@ -785,6 +794,10 @@ defmodule Pdf do
 
     def handle_call({:add_page, size}, _from, document) do
       {:reply, :ok, Document.add_page(document, size: size)}
+    end
+
+    def handle_call(:remove_page, _from, document) do
+      {:reply, :ok, Document.remove_page(document)}
     end
 
     def handle_call(:page_number, _from, document) do
