@@ -12,6 +12,7 @@ defmodule Pdf.Table do
              :columns,
              :repeat_header,
              :allow_row_overflow,
+             :full_width,
              :encoding_replacement_character,
              :padding,
              :border,
@@ -25,6 +26,7 @@ defmodule Pdf.Table do
               # Table-specific opts
               :repeat_header,
               :allow_row_overflow,
+              :full_width,
               :encoding_replacement_character,
               # General styling opts (can apply to table, rows, and cells)
               :padding,
@@ -38,6 +40,7 @@ defmodule Pdf.Table do
           columns: list(Column.t()) | nil,
           repeat_header: integer() | nil,
           allow_row_overflow: boolean() | nil,
+          full_width: boolean() | nil,
           encoding_replacement_character: String.t() | nil,
           padding:
             number()
@@ -83,7 +86,8 @@ defmodule Pdf.Table do
 
     %Table{
       rows: rows,
-      columns: columns
+      columns: columns,
+      full_width: true
     }
     |> merge_options(opts)
   end
@@ -183,13 +187,18 @@ defmodule Pdf.Table do
     # Determine bottom of visible table area
     table_bottom_y = y - total_height
 
+    render_width =
+      if table.full_width == false,
+        do: calculate_total_width(x_starts),
+        else: w
+
     # Third pass: Render the rows using pre-calculated heights
     page =
       page
       |> render_rows({x, y}, rows_to_render, table, x_starts)
       |> draw_background_and_border(
         {x, table_bottom_y},
-        {w, total_height},
+        {render_width, total_height},
         table.background,
         table.border,
         table.border_color
@@ -590,7 +599,8 @@ defmodule Pdf.Table do
     # Use new width distribution algorithm
     # calculated_min_width is already set on columns
     # This treats width (percentage/fixed) as suggestions and calculated_min_width as hard constraint
-    distribute_column_widths(columns, total_width)
+    full_width = table.full_width != false
+    distribute_column_widths(columns, total_width, full_width)
   end
 
   defp calculate_row_column_widths(%Row{cells: []}, _table, _col_idx), do: []
@@ -629,7 +639,9 @@ defmodule Pdf.Table do
 
   # Treats width (percentage/fixed) as suggestions and calculated_min_width and max_width as hard constraints.
   # Uses a combined spec (%{col, width, min, max}) through the pipeline to avoid zipping and index lookups.
-  def distribute_column_widths(columns, total_width) do
+  def distribute_column_widths(columns, total_width), do: distribute_column_widths(columns, total_width, true)
+
+  def distribute_column_widths(columns, total_width, true) do
     # Phase 1: Build specs with initial width from column suggestions
     specs =
       Enum.map(columns, fn col ->
@@ -659,6 +671,32 @@ defmodule Pdf.Table do
     # Phase 2: Iterative proportional scaling
     specs = scale_to_fit(specs, total_width)
 
+    specs_to_columns(specs)
+  end
+
+  def distribute_column_widths(columns, total_width, false) do
+    specs =
+      Enum.map(columns, fn col ->
+        suggested = initial_width_from_column(col, total_width)
+        min = col.calculated_min_width || 0
+        max_width = col.max_width || :infinity
+
+        width =
+          if is_nil(suggested) do
+            min
+          else
+            max(suggested, min)
+          end
+
+        %{col: col, width: width, min: min, max: max_width}
+      end)
+
+    specs = scale_to_fit(specs, total_width, allow_grow: false)
+
+    specs_to_columns(specs)
+  end
+
+  defp specs_to_columns(specs) do
     Enum.map(specs, fn s ->
       rounded_width = if is_float(s.width), do: Float.round(s.width, 3), else: s.width
       %{s.col | width: rounded_width}
@@ -673,11 +711,12 @@ defmodule Pdf.Table do
     end
   end
 
-  defp scale_to_fit(specs, total_width) do
-    scale_to_fit_iter(specs, total_width, 0)
+  defp scale_to_fit(specs, total_width, opts \\ []) do
+    allow_grow = Keyword.get(opts, :allow_grow, true)
+    scale_to_fit_iter(specs, total_width, 0, allow_grow)
   end
 
-  defp scale_to_fit_iter(specs, total_width, iteration) do
+  defp scale_to_fit_iter(specs, total_width, iteration, allow_grow) do
     if iteration >= 10 do
       specs
     else
@@ -699,8 +738,8 @@ defmodule Pdf.Table do
         abs(total - total_width) < 0.01 ->
           specs
 
-        # Total is less than target - scale up proportionally
-        total < total_width ->
+        # Total is less than target - scale up proportionally (unless shrink-only)
+        total < total_width and allow_grow ->
           # Scale up proportionally, excluding columns at maximum width
           {scalable, fixed_map} =
             specs
@@ -758,9 +797,12 @@ defmodule Pdf.Table do
                   %{spec | width: w}
                 end)
 
-              scale_to_fit_iter(new_specs, total_width, iteration + 1)
+              scale_to_fit_iter(new_specs, total_width, iteration + 1, allow_grow)
             end
           end
+
+        total < total_width ->
+          specs
 
         # Total is greater than target - scale down proportionally
         true ->
@@ -830,7 +872,7 @@ defmodule Pdf.Table do
                   %{spec | width: w}
                 end)
 
-              scale_to_fit_iter(new_specs, total_width, iteration + 1)
+              scale_to_fit_iter(new_specs, total_width, iteration + 1, allow_grow)
             end
           end
       end

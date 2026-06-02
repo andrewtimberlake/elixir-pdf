@@ -308,6 +308,108 @@ defmodule Pdf.TableTest do
     end
   end
 
+  describe "full_width: false" do
+    setup do
+      {:ok, collection} = ObjectCollection.start_link()
+      {:ok, fonts} = Fonts.start_link(collection)
+      page = Page.new(fonts: fonts, compress: false) |> Page.set_font("Helvetica", 12)
+      {:ok, page: page}
+    end
+
+    test "defaults to full_width true" do
+      table = Table.new([["a", "b"]])
+      assert table.full_width == true
+    end
+
+    test "shrink-only: column widths sum to less than bounding width", %{page: page} do
+      table =
+        Table.new(
+          [
+            ["Description", "Qty", "Price"],
+            ["Item 1", "1", "10.00"]
+          ],
+          full_width: false,
+          padding: 0,
+          border: 0
+        )
+
+      max_width = 500.0
+      prepared = Pdf.Table.prepare(page, table, max_width)
+      total = prepared.columns |> Enum.map(& &1.width) |> Enum.sum()
+
+      assert total < max_width - 0.01
+      assert total > 0
+    end
+
+    test "scales down when total exceeds max width" do
+      columns = [
+        %Column{width: 0.4, calculated_min_width: 20},
+        %Column{width: 0.4, calculated_min_width: 20},
+        %Column{width: 0.4, calculated_min_width: 20}
+      ]
+
+      result = Pdf.Table.distribute_column_widths(columns, 100, false)
+      total = result |> Enum.map(& &1.width) |> Enum.sum()
+
+      assert total <= 100.01
+      assert total >= 99.99
+    end
+
+    test "percentage width acts as minimum floor", %{page: page} do
+      table =
+        Table.new(
+          [["X", "Y"]],
+          columns: [
+            %Column{width: 0.8, padding: 0},
+            %Column{padding: 0}
+          ],
+          full_width: false,
+          padding: 0,
+          border: 0
+        )
+
+      max_width = 500.0
+      prepared = Pdf.Table.prepare(page, table, max_width)
+      [col1, col2] = prepared.columns
+      total = col1.width + col2.width
+
+      assert col1.width >= max_width * 0.8 - 0.01
+      assert total <= max_width + 0.01
+      assert total < max_width - 0.01
+      assert col2.width > 0
+    end
+
+    test "distribute_column_widths/3 does not expand flexible columns" do
+      columns = [
+        %Column{calculated_min_width: 50},
+        %Column{calculated_min_width: 80},
+        %Column{calculated_min_width: 60}
+      ]
+
+      result = Pdf.Table.distribute_column_widths(columns, 500, false)
+
+      assert [col1, col2, col3] = result
+      assert col1.width == 50.0
+      assert col2.width == 80.0
+      assert col3.width == 60.0
+    end
+
+    test "renders without error when table is narrower than bounding width", %{page: page} do
+      table =
+        Table.new(
+          [["A", "B"], ["1", "2"]],
+          full_width: false,
+          padding: 2,
+          border: 0
+        )
+
+      table = Pdf.Table.prepare(page, table, 500)
+
+      assert {_page, :complete} =
+               Pdf.Table.render(page, {20, 600}, {500, 500}, table)
+    end
+  end
+
   describe "distribute_column_widths/2" do
     test "distributes percentage widths correctly" do
       columns = [

@@ -659,4 +659,73 @@ defmodule Pdf.Examples.TableTest do
 
     if @open, do: System.cmd("open", ["-g", file_path])
   end
+
+  test "full_width false shrinks table to content" do
+    rows = [
+      Row.new(["Item", "Qty", "Price"], bold: true, background: :silver),
+      Row.new(["Widget A", "2", "$50.00"]),
+      Row.new(["Widget B", "1", "$30.00"])
+    ]
+
+    table_full =
+      Table.new(rows,
+        padding: 4,
+        border: 0.5
+      )
+
+    table_narrow =
+      Table.new(rows,
+        full_width: false,
+        padding: 4,
+        border: 0.5
+      )
+
+    file_path = output("table_full_width.pdf")
+    bounds = {50, 750}
+    box = {500, 120}
+
+    {:ok, pdf} = Pdf.new(size: :a4, compress: false)
+
+    pdf =
+      pdf
+      |> Pdf.set_font("Helvetica", 11)
+      |> Pdf.set_fill_color(:black)
+      |> Pdf.set_line_cap(:square)
+      |> Pdf.set_line_join(:miter)
+
+    pdf =
+      pdf
+      |> Pdf.text_at({50, 770}, "full_width: true (default) — table fills the gray box",
+        bold: true
+      )
+      |> draw_table_bounds(bounds, box)
+      |> then(fn pdf ->
+        {x, top_y} = bounds
+        {pdf, :complete} = Pdf.render_table(pdf, {x, top_y}, box, table_full)
+        pdf
+      end)
+
+    pdf =
+      pdf
+      |> Pdf.text_at({50, 580}, "full_width: false — table only as wide as content", bold: true)
+      |> draw_table_bounds({50, 560}, box)
+      |> then(fn pdf ->
+        {pdf, :complete} = Pdf.render_table(pdf, {50, 560}, box, table_narrow)
+        pdf
+      end)
+
+    pdf
+    |> Pdf.write_to(file_path)
+    |> Pdf.cleanup()
+
+    if @open, do: System.cmd("open", ["-g", file_path])
+  end
+
+  defp draw_table_bounds(pdf, {x, top_y}, {w, h}) do
+    pdf
+    |> Pdf.set_line_width(0.5)
+    |> Pdf.set_stroke_color(:light_gray)
+    |> Pdf.rectangle({x, top_y - h}, {w, h})
+    |> Pdf.stroke()
+  end
 end
