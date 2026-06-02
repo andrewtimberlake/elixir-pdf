@@ -680,6 +680,14 @@ defmodule Pdf.Examples.TableTest do
         border: 0.5
       )
 
+    table_equal =
+      Table.new(rows,
+        full_width: false,
+        equal_columns: true,
+        padding: 4,
+        border: 0.5
+      )
+
     file_path = output("table_full_width.pdf")
     bounds = {50, 750}
     box = {500, 120}
@@ -711,6 +719,19 @@ defmodule Pdf.Examples.TableTest do
       |> draw_table_bounds({50, 560}, box)
       |> then(fn pdf ->
         {pdf, :complete} = Pdf.render_table(pdf, {50, 560}, box, table_narrow)
+        pdf
+      end)
+
+    pdf =
+      pdf
+      |> Pdf.text_at(
+        {50, 390},
+        "full_width: false + equal_columns: true — compact, equal column widths",
+        bold: true
+      )
+      |> draw_table_bounds({50, 370}, box)
+      |> then(fn pdf ->
+        {pdf, :complete} = Pdf.render_table(pdf, {50, 370}, box, table_equal)
         pdf
       end)
 

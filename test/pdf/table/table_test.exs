@@ -410,6 +410,63 @@ defmodule Pdf.TableTest do
     end
   end
 
+  describe "equal_columns: true" do
+    setup do
+      {:ok, collection} = ObjectCollection.start_link()
+      {:ok, fonts} = Fonts.start_link(collection)
+      page = Page.new(fonts: fonts, compress: false) |> Page.set_font("Helvetica", 12)
+      {:ok, page: page}
+    end
+
+    test "defaults to equal_columns false" do
+      table = Table.new([["a", "b"]])
+      assert table.equal_columns == false
+    end
+
+    test "with full_width: false all columns share the widest content width", %{page: page} do
+      table =
+        Table.new(
+          [
+            ["Description", "Qty", "Price"],
+            ["Item 1", "1", "10.00"]
+          ],
+          full_width: false,
+          equal_columns: true,
+          padding: 0,
+          border: 0
+        )
+
+      max_width = 500.0
+      prepared = Pdf.Table.prepare(page, table, max_width)
+      [col1, col2, col3] = prepared.columns
+      total = col1.width + col2.width + col3.width
+
+      assert col1.width == col2.width
+      assert col2.width == col3.width
+      assert total < max_width - 0.01
+      assert col1.width > 40
+    end
+
+    test "with full_width: true flexible columns divide space equally", %{page: page} do
+      table =
+        Table.new(
+          [
+            ["A", "B", "C", "D"],
+            ["1", "2", "3", "4"]
+          ],
+          equal_columns: true,
+          padding: 0,
+          border: 0
+        )
+
+      prepared = Pdf.Table.prepare(page, table, 400)
+      widths = Enum.map(prepared.columns, & &1.width)
+
+      assert Enum.all?(widths, fn w -> w == hd(widths) end)
+      assert Enum.sum(widths) == 400.0
+    end
+  end
+
   describe "distribute_column_widths/2" do
     test "distributes percentage widths correctly" do
       columns = [

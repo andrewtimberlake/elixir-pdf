@@ -13,6 +13,7 @@ defmodule Pdf.Table do
              :repeat_header,
              :allow_row_overflow,
              :full_width,
+             :equal_columns,
              :encoding_replacement_character,
              :padding,
              :border,
@@ -27,6 +28,7 @@ defmodule Pdf.Table do
               :repeat_header,
               :allow_row_overflow,
               :full_width,
+              :equal_columns,
               :encoding_replacement_character,
               # General styling opts (can apply to table, rows, and cells)
               :padding,
@@ -41,6 +43,7 @@ defmodule Pdf.Table do
           repeat_header: integer() | nil,
           allow_row_overflow: boolean() | nil,
           full_width: boolean() | nil,
+          equal_columns: boolean() | nil,
           encoding_replacement_character: String.t() | nil,
           padding:
             number()
@@ -87,7 +90,8 @@ defmodule Pdf.Table do
     %Table{
       rows: rows,
       columns: columns,
-      full_width: true
+      full_width: true,
+      equal_columns: false
     }
     |> merge_options(opts)
   end
@@ -596,11 +600,29 @@ defmodule Pdf.Table do
         %{column | calculated_min_width: Enum.max([width, column.min_width || 0])}
       end)
 
+    columns =
+      if table.equal_columns == true do
+        apply_equal_columns(columns)
+      else
+        columns
+      end
+
     # Use new width distribution algorithm
     # calculated_min_width is already set on columns
     # This treats width (percentage/fixed) as suggestions and calculated_min_width as hard constraint
     full_width = table.full_width != false
     distribute_column_widths(columns, total_width, full_width)
+  end
+
+  defp apply_equal_columns(columns) do
+    equal =
+      columns
+      |> Enum.map(fn col ->
+        max(col.calculated_min_width || 0, col.min_width || 0)
+      end)
+      |> Enum.max(fn -> 0 end)
+
+    Enum.map(columns, fn col -> %{col | calculated_min_width: equal} end)
   end
 
   defp calculate_row_column_widths(%Row{cells: []}, _table, _col_idx), do: []
