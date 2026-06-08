@@ -41,10 +41,6 @@ defmodule Pdf.ExternalFont do
     font_file_name = Path.rootname(path) <> ".pfb"
     font_file = File.read!(font_file_name)
 
-    part1 = (:binary.match(font_file, "eexec") |> elem(0)) + 6
-    part2 = (:binary.match(font_file, "00000000") |> elem(0)) - part1
-    part3 = byte_size(font_file) - part1 - part2
-
     widths = Metrics.widths(font_metrics)
     last_char = font_metrics.first_char + length(widths) - 1
 
@@ -68,7 +64,7 @@ defmodule Pdf.ExternalFont do
       glyphs: font_metrics.glyphs,
       kern_pairs: font_metrics.kern_pairs,
       font_file: font_file,
-      dictionary: font_file_dictionary(part1, part2, part3)
+      dictionary: font_file_dictionary(font_file)
     }
   end
 
@@ -101,7 +97,11 @@ defmodule Pdf.ExternalFont do
     |> Dictionary.put("FontFile", ff_id)
   end
 
-  def font_file_dictionary(part1, part2, part3) do
+  def font_file_dictionary(font_file) do
+    part1 = (:binary.match(font_file, "eexec") |> elem(0)) + 6
+    part2 = (:binary.match(font_file, "00000000") |> elem(0)) - part1
+    part3 = byte_size(font_file) - part1 - part2
+
     Dictionary.new()
     |> Dictionary.put("Length1", part1)
     |> Dictionary.put("Length2", part2)

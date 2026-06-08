@@ -106,6 +106,8 @@ Extra Options | Explanation
 `:rows` | Definitions for the individual rows.
 `:encoding_replacement_character` | Supply a character to replace characters that don't match the WIN ANSI encoding
 `:allow_row_overflow` | (boolean) If a row can be split when returning {:continue, data}. Needed for when a row content will be longer than a full table height
+`:full_width` | (boolean, default `true`) When `false`, the table is only as wide as its content requires (capped by the render width), instead of expanding to fill the bounding width.
+`:equal_columns` | (boolean, default `false`) When `true`, every column uses the same width: the largest content-based minimum across columns (after `min_width`). Often combined with `full_width: false` for a compact table with uniform columns.
 
 The headers if set will be repeated with each call.
 

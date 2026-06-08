@@ -206,7 +206,19 @@ defmodule Pdf do
   end
 
   @doc """
+  Add a new page to the Pdf with the current page size.
+
+  The new page will inherit the font from the current page, if set.
+  """
+  def add_page(pid) do
+    :ok = GenServer.call(pid, :add_page)
+    pid
+  end
+
+  @doc """
   Add a new page to the Pdf with the given page size.
+
+  The new page will inherit the font from the current page, if set.
   """
   def add_page(pid, size) do
     :ok = GenServer.call(pid, {:add_page, size})
@@ -283,6 +295,32 @@ defmodule Pdf do
   @spec rectangle(pid, coords, dimension) :: pid
   def rectangle(pid, coords, dimensions) do
     :ok = GenServer.call(pid, {:rectangle, coords, dimensions})
+    pid
+  end
+
+  @doc """
+  Add a clickable link annotation to the current page.
+
+  The coordinates `{x, y}` are the lower-left corner of the link rectangle.
+  The dimensions `{w, h}` are the width and height of the rectangle.
+  """
+  @spec link(pid, coords, dimension, binary) :: pid
+  def link(pid, coords, dimensions, uri) when is_binary(uri) or is_struct(uri, URI) do
+    :ok = GenServer.call(pid, {:link, coords, dimensions, to_string(uri)})
+    pid
+  end
+
+  @doc """
+  Add a clickable link annotation to a specific page number in the document.
+
+  The coordinates `{x, y}` are the lower-left corner of the link rectangle.
+  The dimensions `{w, h}` are the width and height of the rectangle.
+
+  If the specified page number does not exist when rendering, the link is silently dropped.
+  """
+  @spec link_to_page(pid, coords, dimension, integer) :: pid
+  def link_to_page(pid, coords, dimensions, page_number) when is_integer(page_number) do
+    :ok = GenServer.call(pid, {:link_to_page, coords, dimensions, page_number})
     pid
   end
 
@@ -407,7 +445,7 @@ defmodule Pdf do
 
   @doc """
   Writes the text at the given coordinates.
-  The coordinates are the bottom left of the text.
+  The coordinates are the bottom left of the text baseline.
 
   The _text_ can be either a binary or a list of binaries or annotated binaries.
   All text will be drawn on the same line, no wrapping will occur, it may overrun the page.
@@ -533,10 +571,27 @@ defmodule Pdf do
   end
 
   @doc """
+  Render a table in the document at the given coordinates.
+  """
+  @type table :: Pdf.Table.t()
+  @type continuation :: {:continue, Pdf.Table.t()}
+  @spec render_table(pid, coords(), dimension(), table) :: {pid, :complete | continuation}
+  def render_table(pid, coords, dimensions, table) do
+    result = GenServer.call(pid, {:render_table, coords, dimensions, table})
+    {pid, result}
+  end
+
+  def render_table!(pid, coords, dimensions, table) do
+    :complete = GenServer.call(pid, {:render_table, coords, dimensions, table})
+    pid
+  end
+
+  @doc """
   Add a table in the document at the given coordinates.
 
   See [Tables](tables.html) for more information on how to use tables.
   """
+  @deprecated "Use render_table/4 instead"
   def table(pid, coords, dimensions, data, opts \\ []) do
     result = GenServer.call(pid, {:table, coords, dimensions, data, opts})
     {pid, result}
@@ -548,14 +603,48 @@ defmodule Pdf do
 
   See [Tables](tables.html) for more information on how to use tables.
   """
+  @deprecated "Use render_table!/4 instead"
   def table!(pid, coords, dimensions, data, opts \\ []) do
     :ok = GenServer.call(pid, {:table!, coords, dimensions, data, opts})
     pid
   end
 
   @doc """
+  Create an image from binary data. Only PNG and JPEG images are supported.
+  The image can be drawn with `draw_image/3`.
+  """
+  def create_image(pid, {:binary, image_data}) do
+    GenServer.call(pid, {:create_image, {:binary, image_data}})
+  end
+
+  def create_image(pid, image_path) do
+    GenServer.call(pid, {:create_image, image_path})
+  end
+
+  @doc """
+  Draw an image at the given coordinates.
+  The image should be previously created with `create_image/2`.
+
+  The image will be drawn with its bottom left corner at the given coordinates.
+
+  Options:
+    - `:width` (optional) the width to draw the image at
+    - `:height` (optional) the height to draw the image at
+
+  If only width or height is provided, the image will be scaled relative to the supplied dimension.
+  If neither is provided, the image will be drawn at its original size.
+
+  The cursor will be set to the y coordinate of the image
+  """
+  def draw_image(pid, coords, %Pdf.Image{} = image, opts \\ []) do
+    GenServer.call(pid, {:draw_image, coords, image, opts})
+    pid
+  end
+
+  @doc """
   Add an images (PNG, or JPEG only) at the given coordinates.
   """
+  @deprecated "Use create_image/2 and draw_image/3 instead"
   def add_image(pid, coords, image_path), do: add_image(pid, coords, image_path, [])
 
   @doc """
@@ -630,6 +719,16 @@ defmodule Pdf do
   """
   def set_title(pid, title), do: set_info(pid, :title, title)
 
+  def save_state(pid) do
+    :ok = GenServer.call(pid, :save_state)
+    pid
+  end
+
+  def restore_state(pid) do
+    :ok = GenServer.call(pid, :restore_state)
+    pid
+  end
+
   @doc """
   Set multiple keys in the PDF information section.
 
@@ -680,6 +779,10 @@ defmodule Pdf do
       {:reply, :binary.list_to_bin(Document.to_iolist(document)), document}
     end
 
+    def handle_call(:add_page, _from, document) do
+      {:reply, :ok, Document.add_page(document)}
+    end
+
     def handle_call({:add_page, size}, _from, document) do
       {:reply, :ok, Document.add_page(document, size: size)}
     end
@@ -710,6 +813,14 @@ defmodule Pdf do
 
     def handle_call({:rectangle, coords, dimensions}, _from, document) do
       {:reply, :ok, Document.rectangle(document, coords, dimensions)}
+    end
+
+    def handle_call({:link, coords, dimensions, uri}, _from, document) do
+      {:reply, :ok, Document.link(document, coords, dimensions, uri)}
+    end
+
+    def handle_call({:link_to_page, coords, dimensions, page_number}, _from, document) do
+      {:reply, :ok, Document.link_to_page(document, coords, dimensions, page_number)}
     end
 
     def handle_call({:line, coords, coords_to}, _from, document) do
@@ -782,6 +893,11 @@ defmodule Pdf do
       end
     end
 
+    def handle_call({:render_table, coords, dimensions, data}, _from, document) do
+      {document, remaining} = Document.render_table(document, coords, dimensions, data)
+      {:reply, remaining, document}
+    end
+
     def handle_call({:table, coords, dimensions, data}, _from, document) do
       {document, remaining} = Document.table(document, coords, dimensions, data)
       {:reply, remaining, document}
@@ -800,6 +916,20 @@ defmodule Pdf do
     def handle_call({:table!, coords, dimensions, data, opts}, _from, document) do
       document = Document.table!(document, coords, dimensions, data, opts)
       {:reply, :ok, document}
+    end
+
+    def handle_call({:create_image, {:binary, image_data}}, _from, document) do
+      {image, document} = Document.create_image(document, {:binary, image_data})
+      {:reply, image, document}
+    end
+
+    def handle_call({:create_image, image_path}, _from, document) do
+      {image, document} = Document.create_image(document, image_path)
+      {:reply, image, document}
+    end
+
+    def handle_call({:draw_image, coords, image, opts}, _from, document) do
+      {:reply, :ok, Document.draw_image(document, coords, image, opts)}
     end
 
     def handle_call({:add_image, coords, image_path, opts}, _from, document) do
@@ -828,6 +958,14 @@ defmodule Pdf do
 
     def handle_call({:set_info, key, value}, _from, document) do
       {:reply, :ok, Document.put_info(document, key, value)}
+    end
+
+    def handle_call(:save_state, _from, document) do
+      {:reply, :ok, Document.save_state(document)}
+    end
+
+    def handle_call(:restore_state, _from, document) do
+      {:reply, :ok, Document.restore_state(document)}
     end
 
     @impl GenServer

@@ -1,4 +1,4 @@
-defmodule Pdf.TableTest do
+defmodule Pdf.TableDeprecatedTest do
   use Pdf.Case, async: true
 
   alias Pdf.{Page, ObjectCollection, Fonts}
@@ -43,6 +43,7 @@ defmodule Pdf.TableTest do
            /F1 12 Tf
            20 590.934 Td
            (Col 1,1) Tj
+           0.0 0.0 0.0 rg
            ET
            Q
            q
@@ -52,6 +53,7 @@ defmodule Pdf.TableTest do
            /F1 12 Tf
            120.0 590.934 Td
            (Col 1,2) Tj
+           0.0 0.0 0.0 rg
            ET
            Q
            q
@@ -61,6 +63,7 @@ defmodule Pdf.TableTest do
            /F1 12 Tf
            220.0 590.934 Td
            (Col 1,3) Tj
+           0.0 0.0 0.0 rg
            ET
            Q
            q
@@ -70,6 +73,7 @@ defmodule Pdf.TableTest do
            /F1 12 Tf
            20 578.934 Td
            (Col 2,1) Tj
+           0.0 0.0 0.0 rg
            ET
            Q
            q
@@ -79,6 +83,7 @@ defmodule Pdf.TableTest do
            /F1 12 Tf
            120.0 578.934 Td
            (Col 2,2) Tj
+           0.0 0.0 0.0 rg
            ET
            Q
            q
@@ -88,6 +93,7 @@ defmodule Pdf.TableTest do
            /F1 12 Tf
            220.0 578.934 Td
            (Col 2,3) Tj
+           0.0 0.0 0.0 rg
            ET
            Q
            """

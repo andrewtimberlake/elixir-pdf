@@ -3,7 +3,7 @@ defmodule Pdf.Images.JPEG do
 
   import Pdf.Utils
 
-  alias Pdf.{Array, Dictionary, Image}
+  alias Pdf.{Array, Dictionary, ImageRef}
 
   defstruct bit_depth: nil,
             height: nil,
@@ -54,7 +54,7 @@ defmodule Pdf.Images.JPEG do
     %__MODULE__{bit_depth: bit_depth, height: height, width: width, color_type: color_type} =
       decode(image_data)
 
-    build_dictionary(%Image{
+    build_dictionary(%ImageRef{
       bits: bit_depth,
       height: height,
       width: width,
@@ -64,7 +64,7 @@ defmodule Pdf.Images.JPEG do
     })
   end
 
-  def build_dictionary(%Image{} = image) do
+  def build_dictionary(%ImageRef{} = image) do
     %{bits: bit_depth, width: width, height: height, color_type: color_type, size: size} = image
 
     image_dic =

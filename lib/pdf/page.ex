@@ -10,15 +10,17 @@ defmodule Pdf.Page do
             cursor: 0,
             in_text: false,
             saved: %{},
-            saving_state: false
+            saving_state: false,
+            links: [],
+            underlines: []
 
-  defdelegate table(page, data, xy, wh), to: Pdf.Table
-  defdelegate table(page, data, xy, wh, opts), to: Pdf.Table
-  defdelegate table!(page, data, xy, wh), to: Pdf.Table
-  defdelegate table!(page, data, xy, wh, opts), to: Pdf.Table
+  defdelegate table(page, data, xy, wh), to: Pdf.TableDeprecated
+  defdelegate table(page, data, xy, wh, opts), to: Pdf.TableDeprecated
+  defdelegate table!(page, data, xy, wh), to: Pdf.TableDeprecated
+  defdelegate table!(page, data, xy, wh, opts), to: Pdf.TableDeprecated
 
   import Pdf.Utils
-  alias Pdf.{Image, Fonts, Stream, Text, Font}
+  alias Pdf.{Fonts, Stream, Text, Font, Image, Dictionary, Array, ObjectCollection, Paper}
 
   def new(opts \\ [size: :a4]), do: init(opts, %__MODULE__{stream: Stream.new()})
 
@@ -43,11 +45,28 @@ defmodule Pdf.Page do
 
   def push(page, command), do: %{page | stream: Stream.push(page.stream, command)}
 
-  def set_fill_color(%{fill_color: color} = page, color), do: page
+  def link(page, {x, y}, {w, h}, uri) when is_binary(uri) do
+    link = %{x: x, y: y, w: w, h: h, target: {:uri, uri}}
+    %{page | links: [link | page.links]}
+  end
+
+  def link_to_page(page, {x, y}, {w, h}, page_number) when is_integer(page_number) do
+    link = %{x: x, y: y, w: w, h: h, target: {:page, page_number}}
+    %{page | links: [link | page.links]}
+  end
+
+  def set_fill_color(%{saved: %{fill_color: color}, fill_color: color} = page, color), do: page
+  def set_fill_color(%{saved: %{fill_color: _color}, fill_color: color} = page, color), do: page
+
+  def set_fill_color(%{saved: %{fill_color: _color}, fill_color: _color2} = page, color) do
+    push(%{page | fill_color: color}, color_command(color, fill_command(color)))
+  end
 
   def set_fill_color(%{saving_state: true} = page, color) do
     push(page, color_command(color, fill_command(color)))
   end
+
+  def set_fill_color(%{fill_color: color} = page, color), do: page
 
   def set_fill_color(page, color) do
     push(%{page | fill_color: color}, color_command(color, fill_command(color)))
@@ -157,23 +176,85 @@ defmodule Pdf.Page do
     |> push([font.name, size, "Tf"])
   end
 
-  defp end_text(%{in_text: true, saved: saved} = page) do
+  defp end_text(%{in_text: true, saved: saved, underlines: underlines} = page) do
     page =
-      page
-      |> set_text_leading(Map.get(saved, :leading))
-      |> set_fill_color(Map.get(saved, :fill_color))
-
-    push(
       %{
         page
         | in_text: false,
           current_font: Map.get(saved, :current_font),
           current_font_size: Map.get(saved, :current_font_size),
           saved: %{}
-      },
-      ["ET"]
-    )
+      }
+      |> set_text_leading(Map.get(saved, :leading))
+      |> set_fill_color(Map.get(saved, :fill_color))
+      |> push(["ET"])
+
+    # Draw collected underlines (reverse to maintain order)
+    draw_underlines(page, Enum.reverse(underlines))
   end
+
+  defp end_text(page), do: page
+
+  defp draw_underlines(page, []) do
+    %{page | underlines: []}
+  end
+
+  defp draw_underlines(page, underlines) do
+    page = page |> save_state()
+
+    page =
+      Enum.reduce(underlines, page, fn underline, acc ->
+        acc
+        |> set_stroke_color(underline.color)
+        |> set_line_width(underline.size)
+        |> apply_underline_style(underline.style, underline.size)
+        |> move_to({underline.x, underline.y})
+        |> line_append({underline.x + underline.width, underline.y})
+        |> stroke()
+      end)
+
+    page
+    |> restore_state()
+    |> then(fn p -> %{p | underlines: []} end)
+  end
+
+  defp normalize_underline(true, current_color, font_size) do
+    normalize_underline({current_color, :solid}, current_color, font_size)
+  end
+
+  defp normalize_underline({color, style}, _current_color, font_size) do
+    {Enum.max([0.5, font_size * 0.075]), color, style}
+  end
+
+  defp normalize_underline(style, current_color, font_size)
+       when style in [:dotted, :dashed, :solid] do
+    normalize_underline({current_color, style}, current_color, font_size)
+  end
+
+  defp normalize_underline(color, current_color, font_size) do
+    normalize_underline({color, :solid}, current_color, font_size)
+  end
+
+  defp apply_underline_style(page, :solid, _size), do: page
+
+  defp apply_underline_style(page, :dotted, size) do
+    # Dotted pattern: [dash_length, gap_length] - short dashes with small gaps
+    dash_pattern = Pdf.Array.new([size, size])
+    push(page, [dash_pattern, 0, "d"])
+  end
+
+  defp apply_underline_style(page, :dashed, size) do
+    # Simple dashed pattern: [dash_length, gap_length]
+    dash_pattern = Pdf.Array.new([size * 6, size * 3])
+    push(page, [dash_pattern, 0, "d"])
+  end
+
+  defp apply_underline_style(page, {:dashed, pattern}, _size) when is_list(pattern) do
+    dash_pattern = Pdf.Array.new(pattern)
+    push(page, [dash_pattern, 0, "d"])
+  end
+
+  defp apply_underline_style(page, _style, _size), do: page
 
   def text_at(page, xy, text, opts \\ [])
 
@@ -183,7 +264,7 @@ defmodule Pdf.Page do
     page
     |> begin_text()
     |> push([x, y, "Td"])
-    |> print_attributed_line(attributed_text)
+    |> print_attributed_line(attributed_text, x, y)
     |> end_text()
     |> set_cursor(y - line_height(page, attributed_text))
   end
@@ -342,11 +423,99 @@ defmodule Pdf.Page do
     Enum.max(Enum.filter([page.leading, line_height], & &1))
   end
 
-  defp print_attributed_chunks(page, chunks, x, y, width, height, opts, prev_line_height \\ 0)
+  # Shared helper function to process a single line
+  # Returns {:ok, page, line_height, x_offset} or {:no_space, page, line_height}
+  defp process_single_line(
+         page,
+         line,
+         x,
+         y,
+         width,
+         height,
+         opts,
+         prev_line_height,
+         abs_x
+       ) do
+    line_width = Enum.reduce(line, 0, fn {_, width, _}, acc -> width + acc end)
 
-  defp print_attributed_chunks(page, [], _, _, _, _, _, _), do: {page, []}
+    line_height =
+      Keyword.get(opts, :leading, page.leading) ||
+        Enum.map(line, &Keyword.get(elem(&1, 2), :height)) |> Enum.max()
 
-  defp print_attributed_chunks(page, chunks, x, y, width, height, opts, prev_line_height) do
+    if line_height > height do
+      {:no_space, page, line_height}
+    else
+      x_offset =
+        case Keyword.get(opts, :align, :left) do
+          :left -> x
+          :center -> x + (width - line_width) / 2
+          :right -> x + (width - line_width)
+        end
+
+      ascender =
+        line
+        |> Enum.map(&Keyword.get(elem(&1, 2), :ascender))
+        |> Enum.max()
+
+      line_gap =
+        line
+        |> Enum.map(&Keyword.get(elem(&1, 2), :line_gap))
+        |> Enum.max()
+
+      y_offset = if prev_line_height == 0, do: y - (ascender + line_gap), else: -prev_line_height
+
+      # Calculate absolute y position for link annotations (baseline position)
+      # For first line: y is top of text box, baseline is y - (ascender + line_gap)
+      # For subsequent lines: y is already adjusted downward, baseline is at y
+      absolute_y = y - (ascender + line_gap)
+      # if prev_line_height == 0, do: y - (ascender + line_gap), else: y - (ascender + line_gap)
+
+      # Calculate absolute x position for this line (accounting for alignment)
+      absolute_line_x =
+        case Keyword.get(opts, :align, :left) do
+          :left -> abs_x
+          :center -> abs_x + (width - line_width) / 2
+          :right -> abs_x + (width - line_width)
+        end
+
+      page =
+        page
+        |> push([x_offset, y_offset, "Td"])
+        |> print_attributed_line(line, absolute_line_x, absolute_y)
+        |> move_down(line_height)
+
+      {:ok, page, line_height, x_offset}
+    end
+  end
+
+  defp print_attributed_chunks(
+         page,
+         chunks,
+         x,
+         y,
+         width,
+         height,
+         opts,
+         prev_line_height \\ 0,
+         absolute_x \\ nil
+       )
+
+  defp print_attributed_chunks(page, [], _, _, _, _, _, _, _), do: {page, []}
+
+  defp print_attributed_chunks(
+         page,
+         chunks,
+         x,
+         y,
+         width,
+         height,
+         opts,
+         prev_line_height,
+         absolute_x
+       ) do
+    # Track absolute x position of text box (for link annotations)
+    abs_x = absolute_x || x
+
     {line, tail} =
       case Text.wrap_chunks(chunks, width) do
         {[], [line | tail]} ->
@@ -356,54 +525,50 @@ defmodule Pdf.Page do
           other
       end
 
-    line_width = Enum.reduce(line, 0, fn {_, width, _}, acc -> width + acc end)
+    case process_single_line(page, line, x, y, width, height, opts, prev_line_height, abs_x) do
+      {:no_space, page, _line_height} ->
+        # No available vertical space to print the line so return remaining chunks
+        {page, chunks}
 
-    line_height =
-      page.leading || line |> Enum.map(&Keyword.get(elem(&1, 2), :height)) |> Enum.max()
-
-    if line_height > height do
-      # No available vertical space to print the line so return remaining lines
-      {page, chunks}
-    else
-      x_offset =
-        case Keyword.get(opts, :align, :left) do
-          :left -> x
-          :center -> x + (width - line_width) / 2
-          :right -> x + (width - line_width)
-        end
-
-      ascender =
-        line
-        |> Enum.map(&Keyword.get(elem(&1, 2), :ascender))
-        |> Enum.max()
-
-      line_gap =
-        line
-        |> Enum.map(&Keyword.get(elem(&1, 2), :line_gap))
-        |> Enum.max()
-
-      y_offset = if prev_line_height == 0, do: y - (ascender + line_gap), else: -prev_line_height
-
-      page
-      |> push([x_offset, y_offset, "Td"])
-      |> print_attributed_line(line)
-      |> move_down(line_height)
-      |> print_attributed_chunks(
-        tail,
-        x - x_offset,
-        y - line_height,
-        width,
-        height - line_height,
-        opts,
-        line_height
-      )
+      {:ok, page, line_height, x_offset} ->
+        print_attributed_chunks(
+          page,
+          tail,
+          x - x_offset,
+          y - line_height,
+          width,
+          height - line_height,
+          opts,
+          line_height,
+          abs_x
+        )
     end
   end
 
-  defp print_attributed_lines(page, lines, x, y, width, height, opts, prev_line_height \\ 0)
+  defp print_attributed_lines(
+         page,
+         lines,
+         x,
+         y,
+         width,
+         height,
+         opts,
+         prev_line_height \\ 0,
+         absolute_x \\ nil
+       )
 
-  defp print_attributed_lines(page, [], _x, _y, _width, _height, _opts, _prev_line_height),
-    do: {page, []}
+  defp print_attributed_lines(
+         page,
+         [],
+         _x,
+         _y,
+         _width,
+         _height,
+         _opts,
+         _prev_line_height,
+         _absolute_x
+       ),
+       do: {page, []}
 
   defp print_attributed_lines(
          page,
@@ -413,62 +578,91 @@ defmodule Pdf.Page do
          width,
          height,
          opts,
-         prev_line_height
+         prev_line_height,
+         absolute_x
        ) do
-    line_width = Enum.reduce(line, 0, fn {_, width, _}, acc -> width + acc end)
+    # Track absolute x position of text box (for link annotations)
+    abs_x = absolute_x || x
 
-    line_height =
-      page.leading || line |> Enum.map(&Keyword.get(elem(&1, 2), :height)) |> Enum.max()
+    case process_single_line(page, line, x, y, width, height, opts, prev_line_height, abs_x) do
+      {:no_space, page, _line_height} ->
+        # No available vertical space to print the line so return remaining lines
+        {page, [{:line, line} | lines]}
 
-    if line_height > height do
-      # No available vertical space to print the line so return remaining lines
-      {page, [line | lines]}
-    else
-      x_offset =
-        case Keyword.get(opts, :align, :left) do
-          :left -> x
-          :center -> x + (width - line_width) / 2
-          :right -> x + (width - line_width)
-        end
-
-      ascender =
-        line
-        |> Enum.map(&Keyword.get(elem(&1, 2), :ascender))
-        |> Enum.max()
-
-      line_gap =
-        line
-        |> Enum.map(&Keyword.get(elem(&1, 2), :line_gap))
-        |> Enum.max()
-
-      y_offset = if prev_line_height == 0, do: y - (ascender + line_gap), else: -prev_line_height
-
-      page
-      |> push([x_offset, y_offset, "Td"])
-      |> print_attributed_line(line)
-      |> move_down(line_height)
-      |> print_attributed_lines(
-        lines,
-        x - x_offset,
-        y - line_height,
-        width,
-        height - line_height,
-        opts,
-        line_height
-      )
+      {:ok, page, line_height, x_offset} ->
+        print_attributed_lines(
+          page,
+          lines,
+          x - x_offset,
+          y - line_height,
+          width,
+          height - line_height,
+          opts,
+          line_height,
+          abs_x
+        )
     end
   end
 
-  defp print_attributed_line(page, attributed_text) do
+  defp print_attributed_line(page, attributed_text, x, y) do
     attributed_text
-    |> merge_same_opts
-    |> Enum.reduce(page, fn {text, _width, opts}, page ->
-      page
-      |> set_font(opts[:font].module.name, opts[:font_size], opts)
-      |> set_text_leading(opts[:leading])
-      |> set_fill_color(opts[:color])
-      |> push(kerned_text(opts[:font].module, text, opts))
+    |> merge_same_opts()
+    |> Enum.reduce({page, x}, fn {text, width, opts}, {page, x_offset} ->
+      page =
+        page
+        |> add_link(opts[:link], {x_offset, y}, width, opts)
+        |> add_underline(opts[:underline], {x_offset, y}, width, opts)
+        |> set_font(opts[:font].module.name, opts[:font_size], opts)
+        |> set_text_leading(opts[:leading])
+        |> set_fill_color(opts[:color])
+        |> push(kerned_text(opts[:font].module, text, opts))
+
+      {page, x_offset + width}
     end)
+    |> elem(0)
+  end
+
+  defp add_link(page, nil, _xy, _width, _opts), do: page
+
+  defp add_link(page, uri_or_page_number, {x_offset, y}, width, opts) do
+    ascender = Keyword.get(opts, :ascender, 0)
+    descender = Keyword.get(opts, :descender, 0)
+
+    link_y_bottom = y - descender
+    link_y_top = y + ascender
+    link_w = width
+    link_h = link_y_top - link_y_bottom
+
+    case uri_or_page_number do
+      {:page, page_num} ->
+        link_to_page(page, {x_offset, link_y_bottom}, {link_w, link_h}, page_num)
+
+      uri when is_binary(uri) ->
+        link(page, {x_offset, link_y_bottom}, {link_w, link_h}, uri)
+    end
+  end
+
+  defp add_underline(page, nil, _xy, _width, _opts), do: page
+
+  defp add_underline(page, underline_opts, {x_offset, y}, width, opts) do
+    {underline_size, underline_color, underline_style} =
+      normalize_underline(underline_opts, opts[:color], opts[:font_size])
+
+    # Position just below baseline
+    # y is the baseline. Since set_line_width centers the line on the y-coordinate,
+    # we position it at y - underline_size/2 so the line sits just below the baseline
+    underline_y = y - underline_size * 2
+
+    underline = %{
+      x: x_offset,
+      y: underline_y,
+      width: width,
+      size: underline_size,
+      color: underline_color,
+      style: underline_style
+    }
+
+    %{page | underlines: [underline | page.underlines]}
   end
 
   def text_lines(page, xy, lines, opts \\ [])
@@ -486,8 +680,28 @@ defmodule Pdf.Page do
     |> end_text()
   end
 
+  def draw_image(page, {x, y}, %Image{} = image, opts) do
+    width = Keyword.get(opts, :width)
+    height = Keyword.get(opts, :height)
+
+    {width, height} =
+      case {width, height} do
+        {nil, nil} -> {image.width, image.height}
+        {width, nil} -> {width, Image.relative_height(image, width)}
+        {nil, height} -> {Image.relative_width(image, height), height}
+        {width, height} -> {width, height}
+      end
+
+    page
+    |> save_state()
+    |> push([width, 0, 0, height, x, y, "cm"])
+    |> push([image.name, "Do"])
+    |> restore_state()
+    |> set_cursor(y)
+  end
+
   def add_image(page, {x, y}, image, opts \\ []) do
-    %{name: image_name, image: %Image{width: width, height: height}} = image
+    %{name: image_name, width: width, height: height} = image
     scaled_width = Keyword.get(opts, :width, width) / width
     scaled_height = Keyword.get(opts, :height, height) / height
     width = Keyword.get(opts, :width, width * scaled_height)
@@ -590,6 +804,91 @@ defmodule Pdf.Page do
   defp stroke_command(color_name) when is_atom(color_name), do: "RG"
   defp stroke_command({_r, _g, _b}), do: "RG"
   defp stroke_command({_c, _m, _y, _k}), do: "K"
+
+  # Serialize page to PDF page dictionary
+  # Returns the page dictionary reference
+  def to_page_dictionary(page, objects, parent, default_size) do
+    page_object = ObjectCollection.create_object(objects, page)
+
+    dictionary =
+      Dictionary.new(%{
+        "Type" => n("Page"),
+        "Parent" => parent,
+        "Contents" => page_object
+      })
+
+    dictionary =
+      if page.size != default_size do
+        Dictionary.put(dictionary, "MediaBox", Array.new(Paper.size(page.size)))
+      else
+        dictionary
+      end
+
+    ObjectCollection.create_object(objects, dictionary)
+  end
+
+  # Create annotations from page links
+  # Returns list of annotation references
+  def create_annotations(page, objects, page_ref_map) do
+    case Map.get(page, :links, []) do
+      [] ->
+        []
+
+      links ->
+        links
+        |> Enum.reverse()
+        |> Enum.map(fn link -> create_annotation(objects, link, page_ref_map) end)
+        |> Enum.filter(&(&1 != nil))
+    end
+  end
+
+  # Create a single annotation from a link
+  defp create_annotation(objects, %{x: x, y: y, w: w, h: h, target: {:uri, uri}}, _page_refs) do
+    action =
+      Dictionary.new(%{
+        "Type" => n("Action"),
+        "S" => n("URI"),
+        "URI" => s(Text.escape(uri))
+      })
+
+    annot =
+      Dictionary.new(%{
+        "Type" => n("Annot"),
+        "Subtype" => n("Link"),
+        "Rect" => Array.new([x, y, x + w, y + h]),
+        "Border" => Array.new([0, 0, 0]),
+        "A" => action
+      })
+
+    ObjectCollection.create_object(objects, annot)
+  end
+
+  defp create_annotation(objects, %{x: x, y: y, w: w, h: h, target: {:page, page_num}}, page_refs) do
+    case Map.get(page_refs, page_num) do
+      nil ->
+        # Page doesn't exist, drop the link
+        nil
+
+      page_ref ->
+        action =
+          Dictionary.new(%{
+            "Type" => n("Action"),
+            "S" => n("GoTo"),
+            "D" => Array.new([page_ref, n("Fit")])
+          })
+
+        annot =
+          Dictionary.new(%{
+            "Type" => n("Annot"),
+            "Subtype" => n("Link"),
+            "Rect" => Array.new([x, y, x + w, y + h]),
+            "Border" => Array.new([0, 0, 0]),
+            "A" => action
+          })
+
+        ObjectCollection.create_object(objects, annot)
+    end
+  end
 
   defimpl Pdf.Size do
     def size_of(%Pdf.Page{} = page), do: Pdf.Size.size_of(page.stream)

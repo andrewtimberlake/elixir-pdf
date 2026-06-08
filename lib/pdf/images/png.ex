@@ -3,7 +3,7 @@ defmodule Pdf.Images.PNG do
 
   import Pdf.Utils
 
-  alias Pdf.{Image, Dictionary, Stream, ObjectCollection}
+  alias Pdf.{ImageRef, Dictionary, Stream, ObjectCollection}
 
   defstruct bit_depth: nil,
             height: nil,
@@ -111,7 +111,7 @@ defmodule Pdf.Images.PNG do
   defp extract_scan_lines(<<>>, _line_length), do: []
 
   defp extract_scan_lines(image_data, line_length) do
-    <<filter::unsigned-8, line::binary-size(line_length), rest::binary>> = image_data
+    <<filter::unsigned-8, line::binary-size(^line_length), rest::binary>> = image_data
     [{filter, line} | extract_scan_lines(rest, line_length)]
   end
 
@@ -140,7 +140,7 @@ defmodule Pdf.Images.PNG do
   defp breakout_line(_sizes, "", color_data, alpha_data), do: {color_data, alpha_data}
 
   defp breakout_line({color_bytes, alpha_bytes}, line, color_data, alpha_data) do
-    <<color::binary-size(color_bytes), alpha::binary-size(alpha_bytes), rest::binary>> = line
+    <<color::binary-size(^color_bytes), alpha::binary-size(^alpha_bytes), rest::binary>> = line
 
     breakout_line(
       {color_bytes, alpha_bytes},
@@ -156,7 +156,7 @@ defmodule Pdf.Images.PNG do
     extra = prepare_extra(image, objects)
 
     build_dictionary(
-      %Image{
+      %ImageRef{
         bits: bits,
         height: height,
         width: width,
@@ -282,7 +282,7 @@ defmodule Pdf.Images.PNG do
   defp get_colors(4), do: 1
   defp get_colors(6), do: 3
 
-  def build_dictionary(%Image{} = image, extra) do
+  def build_dictionary(%ImageRef{} = image, extra) do
     %{width: width, height: height, size: size} = image
 
     image_dic =

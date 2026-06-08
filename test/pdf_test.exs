@@ -7,6 +7,8 @@ defmodule PdfTest do
     file_path = output("qtest.pdf")
 
     Pdf.build([size: :a4, compress: false], fn pdf ->
+      rgb_image = Pdf.create_image(pdf, fixture("rgb.jpg"))
+
       pdf
       |> Pdf.set_info(
         title: "Test Document",
@@ -35,7 +37,8 @@ defmodule PdfTest do
         kerning: true
       )
       |> Pdf.text_lines({200, 300}, ["smile😀"], encoding_replacement_character: "")
-      |> Pdf.add_image({25, 50}, fixture("rgb.jpg"))
+      |> Pdf.draw_image({25, 50}, rgb_image)
+      |> Pdf.link({25, 50}, {rgb_image.width, rgb_image.height}, "https://hexdocs.pm/pdf")
       |> Pdf.add_image({175, 50}, fixture("cmyk.jpg"))
       |> Pdf.add_image({325, 50}, fixture("grayscale.jpg"))
       |> Pdf.add_image({200, 450}, fixture("grayscale.png"))
@@ -82,7 +85,12 @@ defmodule PdfTest do
       |> Pdf.text_wrap(
         {250, 650},
         {200, 100},
-        "Lorem ipsum dolor sit amet, consectetur\u00A0adipiscing elit. Nullam posuere-nibh consectetur, ullamcorper lorem vel, blandit est. Phasellus ut venenatis odio. Pellentesque eget venenatis dolor.\nUt mattis dui id nulla porta, sit amet congue lacus blandit.😁",
+        [
+          "Lorem ipsum dolor sit amet, consectetur\u00A0adipiscing elit. Nullam ",
+          {"posuere-nibh consectetur",
+           link: "https://hexdocs.pm/pdf", color: :blue, underline: :dashed},
+          ", ullamcorper lorem vel, blandit est. Phasellus ut venenatis odio. Pellentesque eget venenatis dolor.\nUt mattis dui id nulla porta, sit amet congue lacus blandit.😁"
+        ],
         align: :center,
         encoding_replacement_character: ""
       )
@@ -94,18 +102,258 @@ defmodule PdfTest do
         [
           {"Lorem "},
           {"ipsum dolor ", bold: true, size: 12},
-          {"sit amet", color: :red},
-          {", consectetur ", italic: true, size: 14},
+          {"sit amet, ", color: :red},
+          {"consectetur ullamcorper",
+           italic: true,
+           size: 14,
+           color: :blue,
+           link: "https://hexdocs.pm/pdf/Pdf.html#text_wrap/4",
+           underline: {:blue, :dotted}},
           {"adipiscing elit", bold: true, italic: true}
         ],
         align: :right
       )
       |> elem(0)
       |> Pdf.autoprint()
+      |> Pdf.text_at({200, 750}, [
+        "This is a ",
+        {"link to the HexDocs", link: "https://hexdocs.pm/pdf", color: :blue, underline: true},
+        " page."
+      ])
+      |> Pdf.text_at({200, 740}, [
+        "This is a ",
+        {"link to the the next", link: {:page, 2}, color: :blue, underline: :red},
+        " page."
+      ])
+      |> Pdf.add_page()
+      |> add_sample_table()
       |> Pdf.write_to(file_path)
     end)
 
     if @open, do: System.cmd("open", [file_path])
+  end
+
+  defp add_sample_table(pdf) do
+    alias Pdf.{MarginBox, Table}
+    alias Table.{Row, Cell, Column}
+    margin_box = MarginBox.new(pdf, {Pdf.cm(2), Pdf.cm(1)})
+
+    table =
+      Table.new(
+        columns: [
+          %Column{padding: 4, border: 0.5},
+          %Column{padding: 4, border: 0.5},
+          %Column{padding: 4, border: 0.5, align: :right},
+          %Column{padding: 4, border: 0.5, align: :right},
+          %Column{padding: 4, border: 0.5, align: :center}
+        ],
+        border: 0.5,
+        padding: 2,
+        repeat_header: 2
+      )
+      |> Table.add_rows([
+        # Header row with colspans
+        Row.new(
+          [
+            Cell.new("Product Information", colspan: 2, align: :center, bold: true),
+            Cell.new("Pricing", colspan: 2, align: :center, bold: true),
+            Cell.new("Status", align: :center, bold: true)
+          ],
+          background: :gainsboro,
+          border: {0, 0, 1, 0}
+        ),
+        # Sub-header row
+        Row.new(
+          [
+            Cell.new("Item Name", align: :left, bold: true),
+            Cell.new("Description", align: :left, bold: true),
+            Cell.new("Unit Price", align: :right, bold: true),
+            Cell.new("Total", align: :right, bold: true),
+            Cell.new("Active", align: :center, bold: true)
+          ],
+          background: :light_gray,
+          border: {0, 0, 0.5, 0}
+        ),
+        # Data rows with various alignments and wrapping text
+        Row.new([
+          Cell.new([{"Widget A", link: "https://amazon.com", underline: true}], align: :left),
+          Cell.new(
+            "This is a very long description that will definitely wrap across multiple lines when rendered in the PDF document. It contains lots of text to demonstrate text wrapping capabilities.",
+            align: :left
+          ),
+          Cell.new("$25.00", align: :right),
+          Cell.new("$250.00", align: :right),
+          Cell.new("Yes", align: :center)
+        ]),
+        Row.new([
+          Cell.new([{"Gadget B", link: "https://shopify.com", underline: :blue}], align: :left),
+          Cell.new(
+            [
+              "Another lengthy description with lots of words that need to wrap properly. ",
+              "This cell demonstrates left alignment ",
+              {"with wrapping text", link: "https://amazon.com", underline: true, color: :blue},
+              " content that spans multiple lines."
+            ],
+            align: :left
+          ),
+          Cell.new("$42.50", align: :right),
+          Cell.new("$425.00", align: :right),
+          Cell.new("No", align: :center)
+        ]),
+        # Row with colspan
+        Row.new(
+          [
+            Cell.new("Special Offer Items",
+              colspan: 2,
+              align: :center,
+              bold: true,
+              background: :yellow
+            ),
+            Cell.new("$99.99", align: :right),
+            Cell.new("$199.98", align: :right),
+            Cell.new("Limited", align: :center)
+          ],
+          border: {0.5, 0, 0.5, 0}
+        ),
+        Row.new([
+          Cell.new([{"Product X", link: "https://productx.com", color: :blue, underline: true}],
+            align: :left
+          ),
+          Cell.new(
+            [
+              "Center-aligned wrapping text that demonstrates how content flows when centered. ",
+              {"This should wrap nicely",
+               link: "https://amazon.com", underline: true, color: :blue},
+              " across multiple lines while maintaining center alignment."
+            ],
+            align: :center
+          ),
+          Cell.new("$15.75", align: :right),
+          Cell.new("$157.50", align: :right),
+          Cell.new("Yes", align: :center)
+        ]),
+        Row.new([
+          Cell.new("Item Y", align: :left),
+          Cell.new(
+            [
+              "Right-aligned description text ",
+              {"that wraps across multiple lines.",
+               color: :blue, underline: true, link: "https://google.com"},
+              "This demonstrates right alignment with wrapping content in a table cell."
+            ],
+            align: :right
+          ),
+          Cell.new("$33.33", align: :right),
+          Cell.new("$333.30", align: :right),
+          Cell.new("Pending", align: :center)
+        ]),
+        # Another row with colspan
+        Row.new(
+          [
+            Cell.new("Bulk Order Discount", colspan: 3, align: :right, bold: true),
+            Cell.new("-$50.00", align: :right, color: :red),
+            Cell.new("Applied", align: :center)
+          ],
+          border: {0.5, 0, 0.5, 0}
+        ),
+        Row.new([
+          Cell.new("Service Package Z", align: :left),
+          Cell.new(
+            "A comprehensive service package description with extensive details that will wrap across many lines. This demonstrates how longer text content behaves in table cells with proper alignment and wrapping.",
+            align: :left
+          ),
+          Cell.new("$199.99", align: :right),
+          Cell.new("$1,999.90", align: :right),
+          Cell.new("Active", align: :center)
+        ]),
+        Row.new([
+          Cell.new("Premium Item", align: :left),
+          Cell.new(
+            "Premium quality item with detailed specifications and features. This description includes technical details and benefits that require multiple lines to display properly.",
+            align: :center
+          ),
+          Cell.new("$89.50", align: :right),
+          Cell.new("$895.00", align: :right),
+          Cell.new("Yes", align: :center)
+        ]),
+        Row.new([
+          Cell.new("Standard Widget", align: :left),
+          Cell.new(
+            "A standard widget with basic features and functionality. This product offers good value for money and includes standard warranty coverage. The description wraps nicely across multiple lines.",
+            align: :left
+          ),
+          Cell.new("$12.99", align: :right),
+          Cell.new("$129.90", align: :right),
+          Cell.new("Yes", align: :center)
+        ]),
+        Row.new(
+          [
+            Cell.new("Bundle Deal",
+              colspan: 2,
+              align: :center,
+              bold: true,
+              background: :light_blue
+            ),
+            Cell.new("$299.00", align: :right),
+            Cell.new("$2,990.00", align: :right),
+            Cell.new("Active", align: :center)
+          ],
+          border: {0.5, 0, 0.5, 0}
+        ),
+        Row.new([
+          Cell.new("Deluxe Model", align: :left),
+          Cell.new(
+            "Right-aligned description for the deluxe model showcasing premium features and advanced capabilities. This text demonstrates right alignment with comprehensive product information that spans multiple lines.",
+            align: :right
+          ),
+          Cell.new("$175.25", align: :right),
+          Cell.new("$1,752.50", align: :right),
+          Cell.new("Limited", align: :center)
+        ]),
+        Row.new([
+          Cell.new("Economy Line", align: :left),
+          Cell.new(
+            "Center-aligned economy product description highlighting cost-effective solutions and essential features. This demonstrates center alignment with wrapping text content for budget-conscious customers.",
+            align: :center
+          ),
+          Cell.new("$8.50", align: :right),
+          Cell.new("$85.00", align: :right),
+          Cell.new("Yes", align: :center)
+        ]),
+        # Footer row with colspan
+        Row.new(
+          [
+            Cell.new("Grand Total", colspan: 3, align: :right, bold: true),
+            Cell.new("$3,222.68", align: :right, bold: true, background: :light_gray),
+            Cell.new([{"return to page 1", link: {:page, 1}, underline: :dotted, color: :green}],
+              align: :center
+            )
+          ],
+          border: {1, 0, 0, 0},
+          background: :gainsboro
+        )
+      ])
+
+    render_table(
+      pdf,
+      {margin_box.left, margin_box.top},
+      {margin_box.width, margin_box.height},
+      table
+    )
+
+    pdf
+  end
+
+  defp render_table(pdf, coords, dimensions, table) do
+    case Pdf.render_table(pdf, coords, dimensions, table) do
+      {pdf, :complete} ->
+        pdf
+
+      {pdf, {:continue, _table} = continuation} ->
+        pdf
+        |> Pdf.add_page()
+        |> render_table(coords, dimensions, continuation)
+    end
   end
 
   if Kernel.function_exported?(:unicode, :characters_to_nfc_binary, 1) do
