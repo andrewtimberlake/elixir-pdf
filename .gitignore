@@ -28,3 +28,6 @@ pdf-*.tar
 # Misc.
 /.elixir_ls/
 /test/output/
+
+.tool-versions
+.vscode

@@ -1,7 +1,7 @@
 defmodule Pdf.Mixfile do
   use Mix.Project
 
-  @version "0.7.2"
+  @version "0.8.0"
   @github_url "https://github.com/andrewtimberlake/elixir-pdf"
 
   def project do
@@ -58,7 +58,7 @@ defmodule Pdf.Mixfile do
       main: "readme",
       source_url: @github_url,
       source_ref: @version,
-      canonical: "http://hexdocs.pm/pdf",
+      canonical: "https://pdf.hexdocs.pm",
       assets: %{"extra_doc/assets" => "assets"},
       formatters: ["html"]
     ]
