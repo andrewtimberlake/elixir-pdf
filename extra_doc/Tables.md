@@ -95,7 +95,36 @@ Options | Explanation
 `:bold` | `true` or `false`
 `:italic` | `true` or `false`
 `:padding` | The padding to apply, cfr CSS, can take for all sides `{int}`, `{horizontal, vertical}`, `{top, horizontal, bottom}`, `{top, right, bottom, left}`
+`:valign` | Vertical alignment of the cell content within its row, one of `:top` (default), `:middle` or `:bottom`. See below.
 `:colspan` | The number of columns to merge together
+
+#### Vertical alignment
+
+A row is as tall as its tallest cell, so when one cell wraps onto several lines
+the shorter cells in that row have space left over. `:valign` decides where that
+space goes.
+
+```elixir
+Pdf.table(pdf, {20, 700}, {400, 200}, data,
+  padding: 4,
+  valign: :middle,
+  cols: [
+    [width: 100],
+    [],
+    [width: 80, align: :right, valign: :bottom]
+  ],
+  rows: %{
+    0 => [valign: :top, cols: [[valign: :middle]]]
+  }
+)
+```
+
+Like the other general options, the most specific declaration wins: a cell
+overrides its row, a row overrides its column, and a column overrides the table.
+
+Omitting `:valign` (or setting it to `nil`) leaves the content against the top of
+the row, which is how tables have always been drawn. Any other value raises an
+`ArgumentError` rather than silently falling back to `:top`.
 
 ### Table specific options
 
