@@ -441,7 +441,7 @@ defmodule Pdf.Table do
 
   defp background(opts) when is_list(opts), do: Keyword.get(opts, :background)
 
-  defp valign(opts) when is_list(opts), do: Keyword.get(opts, :valign, :top)
+  defp valign(opts) when is_list(opts), do: Keyword.get(opts, :valign) || :top
 
   defp valign_offset(:top, _available_height, _content_height), do: 0
 

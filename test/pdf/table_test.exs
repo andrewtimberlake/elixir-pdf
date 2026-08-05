@@ -220,6 +220,13 @@ defmodule Pdf.TableTest do
       assert valign_positions(page, valign: :top) == valign_positions(page, [])
     end
 
+    test "a nil :valign is treated as absent", %{page: page} do
+      assert valign_positions(page, valign: nil) == valign_positions(page, [])
+
+      assert valign_positions(page, cols: [[width: 60, valign: nil], [width: 140]]) ==
+               valign_positions(page, [])
+    end
+
     test ":middle centres a short cell within the row", %{page: page} do
       assert valign_positions(page, valign: :middle) == [{20, 578.934}, {80, 590.934}]
     end
