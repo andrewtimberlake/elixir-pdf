@@ -218,9 +218,84 @@ defmodule Pdf.TableDeprecatedTest do
              )
   end
 
+  describe "vertical alignment" do
+    @valign_data [["Short", "This description wraps onto three separate lines here"]]
+
+    test "defaults to :top, leaving every cell against the top of the row", %{page: page} do
+      assert valign_positions(page, []) == [{20, 590.934}, {80, 590.934}]
+      assert valign_positions(page, valign: :top) == valign_positions(page, [])
+    end
+
+    test "a nil :valign is treated as absent", %{page: page} do
+      assert valign_positions(page, valign: nil) == valign_positions(page, [])
+
+      assert valign_positions(page, cols: [[width: 60, valign: nil], [width: 140]]) ==
+               valign_positions(page, [])
+    end
+
+    test ":middle centres a short cell within the row", %{page: page} do
+      assert valign_positions(page, valign: :middle) == [{20, 578.934}, {80, 590.934}]
+    end
+
+    test ":bottom pushes a short cell to the bottom of the row", %{page: page} do
+      assert valign_positions(page, valign: :bottom) == [{20, 566.934}, {80, 590.934}]
+    end
+
+    test "a cell option overrides the column, which overrides the table", %{page: page} do
+      assert valign_positions(page, valign: :bottom, cols: [[width: 60, valign: :top], []]) ==
+               [{20, 590.934}, {80, 590.934}]
+
+      assert valign_positions(page,
+               valign: :bottom,
+               cols: [[width: 60, valign: :top], []],
+               rows: %{0 => [cols: [[valign: :middle], []]]}
+             ) == [{20, 578.934}, {80, 590.934}]
+    end
+
+    test "a row option overrides the column", %{page: page} do
+      assert valign_positions(page,
+               cols: [[width: 60, valign: :top], []],
+               rows: %{0 => [valign: :bottom]}
+             ) == [{20, 566.934}, {80, 590.934}]
+    end
+
+    test "an unknown :valign raises instead of silently aligning to the top", %{page: page} do
+      assert_raise ArgumentError, ~r/invalid :valign :centre/, fn ->
+        valign_positions(page, valign: :centre)
+      end
+    end
+  end
+
   defp long_content(string, repeats) do
     1..repeats
     |> Enum.map(fn _ -> string end)
     |> Enum.join(" ")
+  end
+
+  defp valign_positions(page, opts) do
+    opts = Keyword.merge([padding: 0, cols: [[width: 60], [width: 140]]], opts)
+
+    {page, :complete} =
+      page
+      |> Page.set_font("Helvetica", 12)
+      |> Page.table({20, 600}, {200, 500}, @valign_data, opts)
+
+    page
+    |> export()
+    |> String.split("\n")
+    |> Enum.flat_map(fn line ->
+      case String.split(line, " ") do
+        [x, y, "Td"] -> [{parse_number(x), parse_number(y)}]
+        _ -> []
+      end
+    end)
+    |> Enum.reject(&match?({0, _}, &1))
+  end
+
+  defp parse_number(string) do
+    case Integer.parse(string) do
+      {integer, ""} -> integer
+      _ -> String.to_float(string)
+    end
   end
 end

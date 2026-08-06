@@ -355,6 +355,8 @@ defmodule Pdf.TableDeprecated do
     {pt, pr, pb, pl} = padding(col_opts)
     width = Keyword.get(col_opts, :width)
     x = Keyword.get(col_opts, :x)
+    content_height = Keyword.get(col_opts, :height, 0)
+    offset = valign_offset(valign(col_opts), row_height - pt - pb, content_height)
 
     {page, :complete} =
       page
@@ -362,7 +364,7 @@ defmodule Pdf.TableDeprecated do
       |> Page.save_state()
       |> clip({x + pl, y + pb}, {width - pl - pr, row_height - pt - pb})
       |> Page.text_wrap(
-        {x + pl, y + row_height - pt},
+        {x + pl, y + row_height - pt - offset},
         {width - pl - pr, row_height},
         lines,
         col_opts
@@ -466,4 +468,18 @@ defmodule Pdf.TableDeprecated do
   defp border(value), do: normalize_tuple(value)
 
   defp background(opts) when is_list(opts), do: Keyword.get(opts, :background)
+
+  defp valign(opts) when is_list(opts), do: Keyword.get(opts, :valign) || :top
+
+  defp valign_offset(:top, _available_height, _content_height), do: 0
+
+  defp valign_offset(:middle, available_height, content_height),
+    do: max(available_height - content_height, 0) / 2
+
+  defp valign_offset(:bottom, available_height, content_height),
+    do: max(available_height - content_height, 0)
+
+  defp valign_offset(valign, _available_height, _content_height) do
+    raise(ArgumentError, "invalid :valign #{inspect(valign)}, expected :top, :middle or :bottom")
+  end
 end

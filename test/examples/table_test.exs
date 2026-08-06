@@ -742,6 +742,58 @@ defmodule Pdf.Examples.TableTest do
     if @open, do: System.cmd("open", ["-g", file_path])
   end
 
+  test "table with valign" do
+    rows = [
+      Row.new(["Tall", "Top", "Middle", "Bottom"], bold: true, background: :silver),
+      Row.new([
+        Cell.new(
+          "Lorem deserunt adipiscing consectetur cupidatat voluptate tempor dolor aute eiusmod nostrud occaecat sit ea excepteur consectetur id eu velit consequat"
+        ),
+        Cell.new("Top"),
+        Cell.new("Middle", align: :center),
+        Cell.new("Bottom", align: :right)
+      ])
+    ]
+
+    table =
+      Table.new(
+        rows,
+        border: 0.5,
+        columns: [
+          %Column{border: 0.5, padding: 4},
+          %Column{border: 0.5, padding: 4, valign: :top},
+          %Column{border: 0.5, padding: 4, valign: :middle},
+          %Column{border: 0.5, padding: 4, valign: :bottom}
+        ]
+      )
+
+    file_path = output("table_with_valign.pdf")
+    box = {500, 120}
+
+    {:ok, pdf} = Pdf.new(size: :a4, compress: false)
+
+    pdf =
+      pdf
+      |> Pdf.set_font("Helvetica", 11)
+      |> Pdf.set_fill_color(:black)
+      |> Pdf.set_line_cap(:square)
+      |> Pdf.set_line_join(:miter)
+
+    pdf =
+      pdf
+      |> Pdf.text_at({50, 770}, "Table with align and valign", bold: true)
+      |> then(fn pdf ->
+        {pdf, :complete} = Pdf.render_table(pdf, {50, 750}, box, table)
+        pdf
+      end)
+
+    pdf
+    |> Pdf.write_to(file_path)
+    |> Pdf.cleanup()
+
+    if @open, do: System.cmd("open", ["-g", file_path])
+  end
+
   defp draw_table_bounds(pdf, {x, top_y}, {w, h}) do
     pdf
     |> Pdf.set_line_width(0.5)

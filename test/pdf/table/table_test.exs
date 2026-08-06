@@ -857,10 +857,114 @@ defmodule Pdf.TableTest do
                Pdf.Table.render(page, {10, 90}, {80, 80}, table)
     end
 
+    @valign_data [["Short", "This description wraps onto three separate lines here"]]
+
+    test "vertical alignment defaults to :top, leaving every cell against the top of the row", %{
+      page: page
+    } do
+      assert valign_positions(page, []) == [{20, 590.934}, {80, 590.934}]
+      assert valign_positions(page, valign: :top) == valign_positions(page, [])
+    end
+
+    test "vertical alignment treats a nil :valign as absent", %{page: page} do
+      assert valign_positions(page, valign: nil) == valign_positions(page, [])
+
+      assert valign_positions(page,
+               columns: [Column.new(width: 60, valign: nil), Column.new(width: 140)]
+             ) == valign_positions(page, [])
+    end
+
+    test "vertical alignment :middle centres a short cell within the row", %{page: page} do
+      assert valign_positions(page, valign: :middle) == [{20, 578.934}, {80, 590.934}]
+    end
+
+    test "vertical alignment :bottom pushes a short cell to the bottom of the row", %{page: page} do
+      assert valign_positions(page, valign: :bottom) == [{20, 566.934}, {80, 590.934}]
+    end
+
+    test "vertical alignment: a cell option overrides the column, which overrides the table", %{
+      page: page
+    } do
+      assert valign_positions(page,
+               valign: :bottom,
+               columns: [Column.new(width: 60, valign: :top), Column.new(width: 140)]
+             ) == [{20, 590.934}, {80, 590.934}]
+
+      assert valign_positions(page,
+               valign: :bottom,
+               columns: [Column.new(width: 60, valign: :top), Column.new(width: 140)],
+               rows: [
+                 [
+                   Cell.new("Short", valign: :middle),
+                   "This description wraps onto three separate lines here"
+                 ]
+               ]
+             ) == [{20, 578.934}, {80, 590.934}]
+    end
+
+    test "vertical alignment: a row option overrides the column", %{page: page} do
+      assert valign_positions(page,
+               columns: [Column.new(width: 60, valign: :top), Column.new(width: 140)],
+               rows: [
+                 Row.new(
+                   ["Short", "This description wraps onto three separate lines here"],
+                   valign: :bottom
+                 )
+               ]
+             ) == [{20, 566.934}, {80, 590.934}]
+    end
+
+    test "vertical alignment: an unknown :valign raises instead of silently aligning to the top",
+         %{page: page} do
+      assert_raise ArgumentError, ~r/invalid :valign :centre/, fn ->
+        valign_positions(page, valign: :centre)
+      end
+    end
+
     defp long_content(string, repeats) do
       1..repeats
       |> Enum.map(fn _ -> string end)
       |> Enum.join(" ")
+    end
+
+    defp valign_positions(page, opts) do
+      columns =
+        Keyword.get(opts, :columns, [Column.new(width: 60), Column.new(width: 140)])
+
+      rows = Keyword.get(opts, :rows, @valign_data)
+
+      table_opts =
+        opts
+        |> Keyword.take([:valign, :padding])
+        |> Keyword.put_new(:padding, 0)
+        |> Keyword.put(:columns, columns)
+
+      table =
+        Table.new(rows, table_opts)
+        |> then(&Pdf.Table.prepare(Page.set_font(page, "Helvetica", 12), &1, 200))
+
+      {page, :complete} =
+        page
+        |> Page.set_font("Helvetica", 12)
+        |> Pdf.Table.render({20, 600}, {200, 500}, table)
+
+      page
+      |> export()
+      |> String.split("\n")
+      |> Enum.flat_map(fn line ->
+        case String.split(line, " ") do
+          [x, y, "Td"] -> [{parse_number(x), parse_number(y)}]
+          _ -> []
+        end
+      end)
+      |> Enum.reject(&match?({0, _}, &1))
+    end
+
+    defp parse_number(string) do
+      case Integer.parse(string) do
+        {integer, ""} -> integer
+        _ -> String.to_float(string)
+      end
     end
   end
 end

@@ -18,7 +18,8 @@ defmodule Pdf.Table do
              :padding,
              :border,
              :border_color,
-             :background
+             :background,
+             :valign
              | @text_styling_options
            ]}
   defstruct [
@@ -34,7 +35,8 @@ defmodule Pdf.Table do
               :padding,
               :border,
               :border_color,
-              :background
+              :background,
+              :valign
             ] ++ @text_styling_options
 
   @type t :: %Table{
@@ -65,7 +67,8 @@ defmodule Pdf.Table do
           font_size: number() | nil,
           bold: boolean() | nil,
           italic: boolean() | nil,
-          kerning: boolean() | nil
+          kerning: boolean() | nil,
+          valign: :top | :middle | :bottom | nil
         }
 
   def new([{_key, _value} | _opts] = opts) do
@@ -105,6 +108,8 @@ defmodule Pdf.Table do
       end
     end)
   end
+
+  def put_valign(%Table{} = table, valign), do: %{table | valign: valign}
 
   def add_row(table, row, opts \\ [])
   def add_row(%Table{} = table, [], _opts), do: table
@@ -399,6 +404,8 @@ defmodule Pdf.Table do
 
   defp draw_cell(page, {x, y}, width, height, cell, lines) do
     {pt, pr, pb, pl} = cell.padding
+    content_height = calculate_content_height(lines)
+    offset = valign_offset(cell.valign || :top, height - pt - pb, content_height)
 
     # Draw cell background and border
     page =
@@ -427,7 +434,7 @@ defmodule Pdf.Table do
         else
           Page.text_wrap(
             page,
-            {x + pl, y + height - pt},
+            {x + pl, y + height - pt - offset},
             {width - pl - pr, height},
             non_empty_lines,
             extract_text_opts(cell)
@@ -437,6 +444,18 @@ defmodule Pdf.Table do
 
     page
     |> Page.restore_state()
+  end
+
+  defp valign_offset(:top, _available_height, _content_height), do: 0
+
+  defp valign_offset(:middle, available_height, content_height),
+    do: max(available_height - content_height, 0) / 2
+
+  defp valign_offset(:bottom, available_height, content_height),
+    do: max(available_height - content_height, 0)
+
+  defp valign_offset(valign, _available_height, _content_height) do
+    raise(ArgumentError, "invalid :valign #{inspect(valign)}, expected :top, :middle or :bottom")
   end
 
   defp extract_text_opts(%Cell{} = cell) do
@@ -661,7 +680,8 @@ defmodule Pdf.Table do
 
   # Treats width (percentage/fixed) as suggestions and calculated_min_width and max_width as hard constraints.
   # Uses a combined spec (%{col, width, min, max}) through the pipeline to avoid zipping and index lookups.
-  def distribute_column_widths(columns, total_width), do: distribute_column_widths(columns, total_width, true)
+  def distribute_column_widths(columns, total_width),
+    do: distribute_column_widths(columns, total_width, true)
 
   def distribute_column_widths(columns, total_width, true) do
     # Phase 1: Build specs with initial width from column suggestions

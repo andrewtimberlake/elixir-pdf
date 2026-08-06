@@ -15,7 +15,8 @@ defmodule Pdf.Table.Cell do
              :border,
              :border_color,
              :background,
-             :align
+             :align,
+             :valign
              | @text_styling_options
            ]}
   defstruct [
@@ -29,7 +30,8 @@ defmodule Pdf.Table.Cell do
               :border,
               :border_color,
               :background,
-              :align
+              :align,
+              :valign
             ] ++ @text_styling_options
 
   @type t :: %Cell{
@@ -57,6 +59,7 @@ defmodule Pdf.Table.Cell do
           bold: boolean() | nil,
           italic: boolean() | nil,
           align: :left | :center | :right | nil,
+          valign: :top | :middle | :bottom | nil,
           kerning: boolean() | nil
         }
 
@@ -85,7 +88,9 @@ defmodule Pdf.Table.Cell do
   end
 
   def inherit_options(%Cell{} = cell, parent) do
-    inherit_text_options(cell, parent)
+    cell
+    |> inherit_text_options(parent)
+    |> inherit_valign(parent)
   end
 
   defp inherit_text_options(%Cell{} = cell, parent) do
@@ -101,6 +106,13 @@ defmodule Pdf.Table.Cell do
     end)
   end
 
+  defp inherit_valign(%Cell{valign: nil} = cell, parent) do
+    %{valign: inherited_valign} = parent
+    %{cell | valign: inherited_valign}
+  end
+
+  defp inherit_valign(%Cell{} = cell, _parent), do: cell
+
   defp inherit_column_options(%Cell{} = cell, %Column{} = parent) do
     Enum.reduce(
       [
@@ -108,6 +120,7 @@ defmodule Pdf.Table.Cell do
         :max_width,
         :min_width,
         :align,
+        :valign,
         :background
       ],
       cell,
@@ -174,5 +187,6 @@ defmodule Pdf.Table.Cell do
   def put_bold(%Cell{} = cell, bold), do: %{cell | bold: bold}
   def put_italic(%Cell{} = cell, italic), do: %{cell | italic: italic}
   def put_align(%Cell{} = cell, align), do: %{cell | align: align}
+  def put_valign(%Cell{} = cell, valign), do: %{cell | valign: valign}
   def put_kerning(%Cell{} = cell, kerning), do: %{cell | kerning: kerning}
 end

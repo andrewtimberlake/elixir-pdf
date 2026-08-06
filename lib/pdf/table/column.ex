@@ -10,6 +10,7 @@ defmodule Pdf.Table.Column do
              :max_width,
              :min_width,
              :align,
+             :valign,
              :padding,
              :background,
              :border,
@@ -23,6 +24,7 @@ defmodule Pdf.Table.Column do
               :min_width,
               :calculated_min_width,
               :align,
+              :valign,
               :padding,
               :background,
               :border,
@@ -36,6 +38,7 @@ defmodule Pdf.Table.Column do
           min_width: number() | nil,
           calculated_min_width: number() | nil,
           align: :left | :center | :right | nil,
+          valign: :top | :middle | :bottom | nil,
           padding:
             number()
             | {number()}
@@ -77,6 +80,7 @@ defmodule Pdf.Table.Column do
   def put_max_width(%Column{} = column, max_width), do: %{column | max_width: max_width}
   def put_min_width(%Column{} = column, min_width), do: %{column | min_width: min_width}
   def put_align(%Column{} = column, align), do: %{column | align: align}
+  def put_valign(%Column{} = column, valign), do: %{column | valign: valign}
   def put_padding(%Column{} = column, padding), do: %{column | padding: padding}
   def put_background(%Column{} = column, background), do: %{column | background: background}
   def put_color(%Column{} = column, color), do: %{column | color: color}

@@ -95,6 +95,7 @@ Options | Explanation
 `:bold` | `true` or `false`
 `:italic` | `true` or `false`
 `:padding` | The padding to apply, cfr CSS, can take for all sides `{int}`, `{horizontal, vertical}`, `{top, horizontal, bottom}`, `{top, right, bottom, left}`
+`:valign` | Vertical alignment of the cell content within its row, one of `:top` (default), `:middle` or `:bottom`.
 `:colspan` | The number of columns to merge together
 
 ### Table specific options

@@ -12,7 +12,8 @@ defmodule Pdf.Table.Row do
              :background,
              :border,
              :border_color,
-             :padding
+             :padding,
+             :valign
              | @text_styling_options
            ]}
   defstruct [
@@ -22,6 +23,7 @@ defmodule Pdf.Table.Row do
               :border,
               :border_color,
               :padding,
+              :valign,
               :keep_with_previous
             ] ++ @text_styling_options
 
@@ -44,6 +46,7 @@ defmodule Pdf.Table.Row do
             | {number(), number(), number()}
             | {number(), number(), number(), number()}
             | nil,
+          valign: :top | :middle | :bottom | nil,
           font_size: number() | nil,
           bold: boolean() | nil,
           italic: boolean() | nil,
@@ -78,6 +81,7 @@ defmodule Pdf.Table.Row do
   def put_bold(%Row{} = row, bold), do: %{row | bold: bold}
   def put_italic(%Row{} = row, italic), do: %{row | italic: italic}
   def put_kerning(%Row{} = row, kerning), do: %{row | kerning: kerning}
+  def put_valign(%Row{} = row, valign), do: %{row | valign: valign}
 
   def update_cells(%Row{} = row, cells), do: %{row | cells: cells}
 
