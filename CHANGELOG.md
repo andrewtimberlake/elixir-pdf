@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Apply `:encoding_replacement_character` from `Pdf.Table` to cell text during prepare and render
 - Fix `allow_row_overflow` hanging when a row is taller than the available table height
+- Apply table-level `:padding` to cells
 
 ## 0.8.1 (2026-08-06)
 

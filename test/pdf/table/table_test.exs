@@ -134,6 +134,25 @@ defmodule Pdf.TableTest do
       {:ok, page: page}
     end
 
+    test "table padding is inherited by cells", %{page: page} do
+      table =
+        Table.new([["Hello"]], padding: 2)
+        |> then(&Pdf.Table.prepare(page, &1, 200))
+
+      [%Row{cells: [cell]}] = table.rows
+      assert cell.padding == {2, 2, 2, 2}
+    end
+
+    test "table border is the outer frame and is not inherited by cells", %{page: page} do
+      table =
+        Table.new([["Hello"]], padding: 2, border: 0.5)
+        |> then(&Pdf.Table.prepare(page, &1, 200))
+
+      [%Row{cells: [cell]}] = table.rows
+      assert cell.padding == {2, 2, 2, 2}
+      assert cell.border == {0, 0, 0, 0}
+    end
+
     test "encoding_replacement_character is inherited from the table when preparing cells", %{
       page: page
     } do

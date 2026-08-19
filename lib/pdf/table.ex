@@ -566,6 +566,7 @@ defmodule Pdf.Table do
       |> Cell.inherit_options(row)
       |> Cell.inherit_options(column)
       |> Cell.inherit_options(table)
+      |> Cell.finalize_perimeter()
 
     opts = Cell.text_opts(cell)
 

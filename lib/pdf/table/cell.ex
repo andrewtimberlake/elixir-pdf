@@ -2,6 +2,7 @@ defmodule Pdf.Table.Cell do
   @moduledoc false
 
   alias __MODULE__
+  alias Pdf.Table
   alias Pdf.Table.Column
 
   @text_styling_options [:color, :font_size, :bold, :italic, :kerning]
@@ -95,6 +96,7 @@ defmodule Pdf.Table.Cell do
     |> inherit_text_options(parent)
     |> inherit_valign(parent)
     |> inherit_encoding(parent)
+    |> inherit_perimeter_options(parent)
   end
 
   defp inherit_encoding(%Cell{encoding_replacement_character: nil} = cell, %{
@@ -149,32 +151,50 @@ defmodule Pdf.Table.Cell do
     )
   end
 
-  defp inherit_perimeter_options(%Cell{} = cell, %Column{} = parent) do
-    Enum.reduce(
-      [
-        {:padding, 0},
-        {:border, 0},
-        {:border_color, nil}
-      ],
-      cell,
-      fn {option, default}, cell ->
+  # Table-level :border is the outer frame (drawn around the table).
+  # Only :padding is a cell default from the table.
+  defp inherit_perimeter_options(%Cell{} = cell, %Table{} = parent) do
+    inherit_perimeter_options(cell, parent, [{:padding, nil}])
+  end
+
+  defp inherit_perimeter_options(%Cell{} = cell, parent) when is_map(parent) do
+    inherit_perimeter_options(cell, parent, [
+      {:padding, nil},
+      {:border, nil},
+      {:border_color, nil}
+    ])
+  end
+
+  defp inherit_perimeter_options(%Cell{} = cell, parent, options) do
+    Enum.reduce(options, cell, fn {option, default}, cell ->
+      if Map.has_key?(parent, option) do
         %{^option => cell_value} = cell
         normalized_cell_value = normalize_perimeter_tuple(cell_value, nil)
         %{^option => parent_value} = parent
         normalized_parent_value = normalize_perimeter_tuple(parent_value, default)
         merged_value = merge_tuples(normalized_cell_value, normalized_parent_value)
         %{cell | option => merged_value}
+      else
+        cell
       end
-    )
+    end)
+  end
+
+  def finalize_perimeter(%Cell{} = cell) do
+    %{
+      cell
+      | padding: normalize_perimeter_tuple(cell.padding, 0),
+        border: normalize_perimeter_tuple(cell.border, 0)
+    }
   end
 
   def normalize_perimeter_tuple(value, default \\ 0)
   def normalize_perimeter_tuple(nil, default), do: {default, default, default, default}
   def normalize_perimeter_tuple({nil}, default), do: {default, default, default, default}
   def normalize_perimeter_tuple({all}, _default), do: {all, all, all, all}
-  def normalize_perimeter_tuple({tb, lr}, _default), do: {tb, lr, tb, lr}
-  def normalize_perimeter_tuple({t, lr, b}, _default), do: {t, lr, b, lr}
-  def normalize_perimeter_tuple({t, r, b, l}, _default), do: {t, r, b, l}
+  def normalize_perimeter_tuple({tb, lr}, default), do: {tb || default, lr || default, tb || default, lr || default}
+  def normalize_perimeter_tuple({t, lr, b}, default), do: {t || default, lr || default, b || default, lr || default}
+  def normalize_perimeter_tuple({t, r, b, l}, default), do: {t || default, r || default, b || default, l || default}
   def normalize_perimeter_tuple(all, _default), do: {all, all, all, all}
 
   def merge_tuples({t, r, b, l}, {pt, pr, pb, pl}),
