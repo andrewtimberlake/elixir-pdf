@@ -480,7 +480,8 @@ defmodule Pdf.Table do
       italic: cell.italic,
       align: cell.align,
       kerning: cell.kerning,
-      color: cell.color
+      color: cell.color,
+      encoding_replacement_character: cell.encoding_replacement_character
     ]
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
   end

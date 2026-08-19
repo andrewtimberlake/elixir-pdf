@@ -16,7 +16,8 @@ defmodule Pdf.Table.Cell do
              :border_color,
              :background,
              :align,
-             :valign
+             :valign,
+             :encoding_replacement_character
              | @text_styling_options
            ]}
   defstruct [
@@ -31,7 +32,8 @@ defmodule Pdf.Table.Cell do
               :border_color,
               :background,
               :align,
-              :valign
+              :valign,
+              :encoding_replacement_character
             ] ++ @text_styling_options
 
   @type t :: %Cell{
@@ -60,7 +62,8 @@ defmodule Pdf.Table.Cell do
           italic: boolean() | nil,
           align: :left | :center | :right | nil,
           valign: :top | :middle | :bottom | nil,
-          kerning: boolean() | nil
+          kerning: boolean() | nil,
+          encoding_replacement_character: String.t() | nil
         }
 
   def new(cell_or_data, opts \\ [])
@@ -91,7 +94,16 @@ defmodule Pdf.Table.Cell do
     cell
     |> inherit_text_options(parent)
     |> inherit_valign(parent)
+    |> inherit_encoding(parent)
   end
+
+  defp inherit_encoding(%Cell{encoding_replacement_character: nil} = cell, %{
+         encoding_replacement_character: value
+       }) do
+    %{cell | encoding_replacement_character: value}
+  end
+
+  defp inherit_encoding(cell, _parent), do: cell
 
   defp inherit_text_options(%Cell{} = cell, parent) do
     Enum.reduce(@text_styling_options, cell, fn option, cell ->
@@ -169,7 +181,7 @@ defmodule Pdf.Table.Cell do
     do: {t || pt, r || pr, b || pb, l || pl}
 
   def text_opts(%Cell{} = cell) do
-    @text_styling_options
+    (@text_styling_options ++ [:encoding_replacement_character])
     |> Enum.map(fn option ->
       %{^option => value} = cell
       {option, value}
@@ -189,4 +201,7 @@ defmodule Pdf.Table.Cell do
   def put_align(%Cell{} = cell, align), do: %{cell | align: align}
   def put_valign(%Cell{} = cell, valign), do: %{cell | valign: valign}
   def put_kerning(%Cell{} = cell, kerning), do: %{cell | kerning: kerning}
+
+  def put_encoding_replacement_character(%Cell{} = cell, encoding_replacement_character),
+    do: %{cell | encoding_replacement_character: encoding_replacement_character}
 end

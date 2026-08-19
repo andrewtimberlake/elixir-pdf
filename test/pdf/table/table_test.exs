@@ -134,6 +134,25 @@ defmodule Pdf.TableTest do
       {:ok, page: page}
     end
 
+    test "encoding_replacement_character is inherited from the table when preparing cells", %{
+      page: page
+    } do
+      table =
+        Table.new([["Hello 😅 World"]], encoding_replacement_character: "?")
+        |> then(&Pdf.Table.prepare(page, &1, 400))
+
+      [%Row{cells: [cell]}] = table.rows
+      assert cell.encoding_replacement_character == "?"
+    end
+
+    test "characters outside WinAnsi raise without encoding_replacement_character", %{page: page} do
+      table = Table.new([["Hello 😅 World"]])
+
+      assert_raise ArgumentError, "Incompatible with WinAnsi encoding", fn ->
+        Pdf.Table.prepare(page, table, 400)
+      end
+    end
+
     test "column widths can be percentages", %{page: page} do
       table =
         Table.new(
@@ -670,6 +689,18 @@ defmodule Pdf.TableTest do
       {page, :complete} = Pdf.Table.render(page, {20, 600}, {500, 500}, table)
 
       assert export(page) == "\n"
+    end
+
+    test "replaces characters outside WinAnsi when encoding_replacement_character is set", %{
+      page: page
+    } do
+      table =
+        Table.new([["Hello 😅"]], encoding_replacement_character: "?")
+        |> then(&Pdf.Table.prepare(page, &1, 200))
+
+      {page, :complete} = Pdf.Table.render(page, {20, 600}, {200, 100}, table)
+
+      assert export(page) =~ "(Hello ?) Tj"
     end
 
     test "basic table", %{page: page} do
