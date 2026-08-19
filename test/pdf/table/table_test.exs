@@ -778,6 +778,24 @@ defmodule Pdf.TableTest do
       assert Enum.all?(cells, &(&1.chunks != nil && length(&1.chunks) > 0))
     end
 
+    test "a row taller than the page completes when allow_row_overflow is set", %{page: page} do
+      table =
+        Table.new(
+          [
+            Row.new(["Remarks"], bold: true),
+            [long_content("overflow", 400)]
+          ],
+          columns: [%Column{padding: 2}],
+          allow_row_overflow: true,
+          repeat_header: 1
+        )
+        |> then(&Pdf.Table.prepare(Page.set_font(page, "Helvetica", 12), &1, 200))
+
+      {_page, pages} = render_until_complete(page, table, {20, 600}, {200, 200}, 20)
+
+      assert pages > 1
+    end
+
     test "row exceeds available space but with partial row allowed" do
       {:ok, collection} = ObjectCollection.start_link()
       {:ok, fonts} = Fonts.start_link(collection)
@@ -803,17 +821,45 @@ defmodule Pdf.TableTest do
               {:continue, %Pdf.Table{rows: [%Pdf.Table.Row{cells: cells}]} = continued_table}} =
                result
 
-      # Verify overflow cell has chunks (some cells might be nil)
       assert length(cells) == 3
       [cell1, cell2, cell3] = cells
-      assert (cell1 != nil && (cell1.chunks == [] || length(cell1.chunks) == 0)) || cell1 == nil
-      assert cell2 != nil && length(cell2.chunks) > 0
-      assert (cell3 != nil && (cell3.chunks == [] || length(cell3.chunks) == 0)) || cell3 == nil
+      assert cell1.chunks == []
+      assert length(cell2.chunks) > 0
+      assert cell3.chunks == []
 
       {page, _} = result
 
       assert {_page, :complete} =
                Pdf.Table.render(page, {10, 90}, {80, 80}, continued_table)
+    end
+
+    test "overflow leftover stays in the original column", %{page: page} do
+      table =
+        Table.new(
+          [
+            ["Date", "Remarks", "User"],
+            ["14 Feb 2020", long_content("remarks", 80), "System"]
+          ],
+          columns: [
+            %Column{width: 60, padding: 2},
+            %Column{padding: 2},
+            %Column{width: 50, padding: 2}
+          ],
+          allow_row_overflow: true,
+          repeat_header: 1
+        )
+        |> then(&Pdf.Table.prepare(Page.set_font(page, "Helvetica", 12), &1, 200))
+
+      {_page, {:continue, continued}} =
+        Pdf.Table.render(page, {20, 600}, {200, 80}, table)
+
+      [%Row{cells: header_cells}, %Row{cells: [date_cell, remarks_cell, user_cell]} | _] =
+        continued.rows
+
+      assert Enum.map(header_cells, & &1.data) == ["Date", "Remarks", "User"]
+      assert date_cell.chunks == []
+      assert length(remarks_cell.chunks) > 0
+      assert user_cell.chunks == []
     end
 
     test "handle empty row generated from trailing whitespace" do
@@ -925,6 +971,25 @@ defmodule Pdf.TableTest do
       1..repeats
       |> Enum.map(fn _ -> string end)
       |> Enum.join(" ")
+    end
+
+    defp render_until_complete(page, table, xy, wh, max_pages) do
+      Enum.reduce_while(1..max_pages, {page, table, 0}, fn _, {page, table, pages} ->
+        case Pdf.Table.render(page, xy, wh, table) do
+          {page, :complete} ->
+            {:halt, {page, pages + 1}}
+
+          {page, {:continue, remaining}} ->
+            {:cont, {page, remaining, pages + 1}}
+        end
+      end)
+      |> case do
+        {page, pages} when is_integer(pages) ->
+          {page, pages}
+
+        {_page, remaining, pages} ->
+          flunk("table did not complete after #{pages} pages, remaining=#{inspect(remaining)}")
+      end
     end
 
     defp valign_positions(page, opts) do

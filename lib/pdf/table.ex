@@ -265,23 +265,31 @@ defmodule Pdf.Table do
          x_starts,
          acc_height
        ) do
-    # Filter out nil cells
-    cells = Enum.reject(row.cells || [], &is_nil/1)
+    cells = row.cells || []
 
     # Calculate row height and overflow
     {cell_heights, overflow_cells} =
       calculate_row_metrics(nil, remaining_h, cells, table, x_starts)
 
     row_height = Enum.max(cell_heights, fn -> 0 end)
+    overflow? = Enum.any?(overflow_cells, &overflow_cell?/1)
 
     cond do
-      # Row doesn't fit - this row and all following rows are remaining
+      # Split the row when overflow produced leftover content. This must
+      # run before the "doesn't fit" branch: fitted text + padding can exceed
+      # remaining_h even though overflow_lines already reserved leftover lines.
+      # Deferring the whole row in that case never makes progress.
+      table.allow_row_overflow && overflow? && (row_height <= remaining_h || acc_rows == []) ->
+        row_with_height = Map.put(row, :calculated_height, min(row_height, remaining_h))
+        overflow_row = %Row{cells: Enum.reverse(overflow_cells)}
+
+        {Enum.reverse([row_with_height | acc_rows]), [overflow_row | tail],
+         acc_height + min(row_height, remaining_h)}
+
       row_height > remaining_h ->
         {Enum.reverse(acc_rows), [row | tail], acc_height}
 
-      # We have overflow - this row is partially rendered
-      Enum.any?(overflow_cells, &(&1 != nil)) ->
-        # Store calculated height on the row
+      overflow? ->
         row_with_height = Map.put(row, :calculated_height, row_height)
         overflow_row = %Row{cells: Enum.reverse(overflow_cells)}
 
@@ -289,7 +297,6 @@ defmodule Pdf.Table do
          acc_height + row_height}
 
       true ->
-        # Store calculated height on the row
         row_with_height = Map.put(row, :calculated_height, row_height)
 
         calculate_rows_to_render_rec(
@@ -308,7 +315,7 @@ defmodule Pdf.Table do
     {final_page, _final_y} =
       Enum.reduce(rows, {page, y}, fn row, {page_acc, current_y} ->
         row_height = Map.get(row, :calculated_height) || 0
-        cells = Enum.reject(row.cells || [], &is_nil/1)
+        cells = row.cells || []
         draw_y = current_y - row_height
 
         # Draw the row using pre-calculated height
@@ -345,32 +352,36 @@ defmodule Pdf.Table do
     end
   end
 
+  defp overflow_cell?(%{chunks: chunks}) when is_list(chunks) and chunks != [], do: true
+  defp overflow_cell?(_cell), do: false
+
   defp calculate_row_metrics(_page, height, cells, table, x_starts) do
     {heights, overflows, _idx} =
-      Enum.reduce(cells, {[], [], 0}, fn cell, {heights_acc, overflow_acc, col_idx} ->
-        colspan = cell.colspan || 1
-        {pt, pr, pb, pl} = cell.padding
-        cell_width = calculate_cell_width(x_starts, col_idx, colspan)
-        text_width = cell_width - pr - pl
+      Enum.reduce(cells, {[], [], 0}, fn
+        nil, {heights_acc, overflow_acc, col_idx} ->
+          {[0 | heights_acc], [nil | overflow_acc], col_idx + 1}
 
-        # Wrap text and handle overflow
-        {lines, overflow} = wrap_cell_text(cell.chunks || [], text_width, table, height)
+        cell, {heights_acc, overflow_acc, col_idx} ->
+          colspan = cell.colspan || 1
+          {pt, pr, pb, pl} = cell.padding
+          cell_width = calculate_cell_width(x_starts, col_idx, colspan)
+          text_width = cell_width - pr - pl
+          available_text_height = max(height - pt - pb, 0)
 
-        # Calculate content height
-        content_height = calculate_content_height(lines)
+          {lines, overflow} =
+            wrap_cell_text(cell.chunks || [], text_width, table, available_text_height)
 
-        # Cell height includes padding
-        cell_height = content_height + pt + pb
+          content_height = calculate_content_height(lines)
+          cell_height = content_height + pt + pb
+          overflow_cell = %{cell | chunks: overflow}
 
-        overflow_cell = if Enum.empty?(overflow), do: nil, else: %{cell | chunks: overflow}
-
-        {[cell_height | heights_acc], [overflow_cell | overflow_acc], col_idx + colspan}
+          {[cell_height | heights_acc], [overflow_cell | overflow_acc], col_idx + colspan}
       end)
 
     {Enum.reverse(heights), overflows}
   end
 
-  defp draw_row(page, {x, y}, {w, h}, %Row{} = row, cells, table, x_starts, row_height) do
+  defp draw_row(page, {x, y}, {w, _h}, %Row{} = row, cells, table, x_starts, row_height) do
     # Draw row background and border (covering the entire row width)
     page =
       draw_background_and_border(
@@ -383,21 +394,25 @@ defmodule Pdf.Table do
       )
 
     # Draw cells
-    Enum.reduce(cells, {page, 0}, fn cell, {page_acc, col_idx} ->
-      colspan = cell.colspan || 1
+    Enum.reduce(cells, {page, 0}, fn
+      nil, {page_acc, col_idx} ->
+        {page_acc, col_idx + 1}
 
-      cell_x = calculate_cell_x(x_starts, col_idx, x)
-      cell_width = calculate_cell_width(x_starts, col_idx, colspan)
-      {_pt, pr, _pb, pl} = cell.padding
-      text_width = cell_width - pr - pl
+      cell, {page_acc, col_idx} ->
+        colspan = cell.colspan || 1
 
-      # Wrap text and handle overflow (same logic as calculate_row_metrics)
-      {lines, _overflow} = wrap_cell_text(cell.chunks || [], text_width, table, h)
+        cell_x = calculate_cell_x(x_starts, col_idx, x)
+        cell_width = calculate_cell_width(x_starts, col_idx, colspan)
+        {pt, pr, pb, pl} = cell.padding
+        text_width = cell_width - pr - pl
+        available_text_height = max(row_height - pt - pb, 0)
 
-      # Row height already includes padding from calculate_row_metrics
-      page = draw_cell(page_acc, {cell_x, y}, cell_width, row_height, cell, lines)
+        {lines, _overflow} =
+          wrap_cell_text(cell.chunks || [], text_width, table, available_text_height)
 
-      {page, col_idx + colspan}
+        page = draw_cell(page_acc, {cell_x, y}, cell_width, row_height, cell, lines)
+
+        {page, col_idx + colspan}
     end)
     |> elem(0)
   end
@@ -924,17 +939,27 @@ defmodule Pdf.Table do
   defp overflow_lines(lines, max_height) do
     filtered = filter_empty_lines(lines)
 
-    {lines, overflow} =
+    {fitted, overflow} =
       filtered
       |> Enum.map_reduce(0, fn {:line, line}, acc ->
         line_height = Enum.max(Enum.map(line, &Keyword.get(elem(&1, 2), :height)))
         {{:line, line, line_height + acc}, line_height + acc}
       end)
       |> elem(0)
-      |> Enum.split_while(fn {:line, _line, height} -> height < max_height end)
+      |> Enum.split_while(fn {:line, _line, height} -> height <= max_height end)
+
+    # If even the first line is taller than the remaining space, keep it so
+    # the row still advances instead of retrying the same content forever.
+    {fitted, overflow} =
+      if fitted == [] and overflow != [] do
+        [first | rest] = overflow
+        {[first], rest}
+      else
+        {fitted, overflow}
+      end
 
     {
-      Enum.map(lines, fn {:line, line, _} -> {:line, line} end),
+      Enum.map(fitted, fn {:line, line, _} -> {:line, line} end),
       Enum.flat_map(overflow, fn {:line, line, _} -> line end)
     }
   end

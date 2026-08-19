@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.8.2 (2026-08-19)
+
+- Apply `:encoding_replacement_character` from `Pdf.Table` to cell text during prepare and render
+- Fix `allow_row_overflow` hanging when a row is taller than the available table height
+
+## 0.8.1 (2026-08-06)
+
+- Add vertical alignment for table cells
+
 ## 0.8.0 (2026-06-08)
 
 - Add `Pdf.remove_page/1` to remove the last page from the document
