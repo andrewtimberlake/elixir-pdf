@@ -36,9 +36,11 @@ defmodule Pdf.Font.Metrics do
     end)
   end
 
+  # Keyed by the WinAnsi byte. Width lookups run on the encoded string, and for
+  # characters such as ellipsis that byte is not the Unicode codepoint.
   def map_widths(font) do
     Pdf.Encoding.WinAnsi.characters()
-    |> Enum.map(fn {_, char, name} ->
+    |> Enum.map(fn {char, _, name} ->
       width =
         case font.glyphs[name] do
           nil ->

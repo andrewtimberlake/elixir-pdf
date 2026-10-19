@@ -16,6 +16,14 @@ defmodule Pdf.FontTest do
                Font.text_width(font, "VA?", 10, kerning: true)
     end
 
+    test "WinAnsi punctuation is measured by its encoded byte" do
+      font = Fonts.get_internal_font("Helvetica")
+      assert Font.text_width(font, "…") == 1000
+      assert Font.text_width(font, "…", 10) == 10.0
+      assert Font.text_width(font, "—") == 1000
+      assert Font.text_width(font, "€") == 556
+    end
+
     test "It calculates the width of a blank string" do
       font = Fonts.get_internal_font("Helvetica")
       assert Font.text_width(font, "") == 0

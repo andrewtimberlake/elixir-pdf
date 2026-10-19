@@ -537,6 +537,9 @@ defmodule Pdf do
   :------ | :------ | :------
   `:align` | :left , :center , :right | :left
   `:kerning` | `boolean` | false
+  `:truncate` | `boolean` | false
+
+  When `:truncate` is `true` and the text is taller than the box, the text that fits is rendered and the last visible line ends with an ellipsis. No remaining text is returned.
   """
   @spec text_wrap(pid, coords(), dimension(), binary | list, keyword) :: {pid, :complete | term()}
   def text_wrap(pid, coords, dimensions, text, opts) do
@@ -553,7 +556,10 @@ defmodule Pdf do
   end
 
   @doc """
-  This function has the same options as `text_wrap/5`, but if the text is too large for the box, a `RuntimeError` will be raised.
+  This function has the same options as `text_wrap/5`.
+
+  If the text is too large for the box, a `RuntimeError` will be raised.
+  Pass `truncate: true` to render the text that fits, ending the last visible line with an ellipsis, instead of raising.
   """
   @spec text_wrap!(pid, coords(), dimension(), binary | list, keyword) :: pid
   def text_wrap!(pid, coords, dimensions, text, opts) do

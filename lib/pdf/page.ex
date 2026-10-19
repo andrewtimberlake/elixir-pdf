@@ -22,6 +22,8 @@ defmodule Pdf.Page do
   import Pdf.Utils
   alias Pdf.{Fonts, Stream, Text, Font, Image, Dictionary, Array, ObjectCollection, Paper}
 
+  @ellipsis "…"
+
   def new(opts \\ [size: :a4]), do: init(opts, %__MODULE__{stream: Stream.new()})
 
   defp init([], page), do: page
@@ -516,32 +518,31 @@ defmodule Pdf.Page do
     # Track absolute x position of text box (for link annotations)
     abs_x = absolute_x || x
 
-    {line, tail} =
-      case Text.wrap_chunks(chunks, width) do
-        {[], [line | tail]} ->
-          {[line], tail}
+    {line, tail} = wrap_next_line(chunks, width)
 
-        other ->
-          other
-      end
+    case prepare_truncated_line(line, tail, width, height, opts, page) do
+      :stop ->
+        {page, []}
 
-    case process_single_line(page, line, x, y, width, height, opts, prev_line_height, abs_x) do
-      {:no_space, page, _line_height} ->
-        # No available vertical space to print the line so return remaining chunks
-        {page, chunks}
+      {:draw, line, tail} ->
+        case process_single_line(page, line, x, y, width, height, opts, prev_line_height, abs_x) do
+          {:no_space, page, _line_height} ->
+            # No available vertical space to print the line so return remaining chunks
+            {page, chunks}
 
-      {:ok, page, line_height, x_offset} ->
-        print_attributed_chunks(
-          page,
-          tail,
-          x - x_offset,
-          y - line_height,
-          width,
-          height - line_height,
-          opts,
-          line_height,
-          abs_x
-        )
+          {:ok, page, line_height, x_offset} ->
+            print_attributed_chunks(
+              page,
+              tail,
+              x - x_offset,
+              y - line_height,
+              width,
+              height - line_height,
+              opts,
+              line_height,
+              abs_x
+            )
+        end
     end
   end
 
@@ -584,23 +585,157 @@ defmodule Pdf.Page do
     # Track absolute x position of text box (for link annotations)
     abs_x = absolute_x || x
 
-    case process_single_line(page, line, x, y, width, height, opts, prev_line_height, abs_x) do
-      {:no_space, page, _line_height} ->
-        # No available vertical space to print the line so return remaining lines
-        {page, [{:line, line} | lines]}
+    case prepare_truncated_line(line, lines, width, height, opts, page) do
+      :stop ->
+        {page, []}
 
-      {:ok, page, line_height, x_offset} ->
-        print_attributed_lines(
-          page,
-          lines,
-          x - x_offset,
-          y - line_height,
-          width,
-          height - line_height,
-          opts,
-          line_height,
-          abs_x
-        )
+      {:draw, line, lines} ->
+        case process_single_line(page, line, x, y, width, height, opts, prev_line_height, abs_x) do
+          {:no_space, page, _line_height} ->
+            # No available vertical space to print the line so return remaining lines
+            {page, [{:line, line} | lines]}
+
+          {:ok, page, line_height, x_offset} ->
+            print_attributed_lines(
+              page,
+              lines,
+              x - x_offset,
+              y - line_height,
+              width,
+              height - line_height,
+              opts,
+              line_height,
+              abs_x
+            )
+        end
+    end
+  end
+
+  defp wrap_next_line(chunks, width) do
+    case Text.wrap_chunks(chunks, width) do
+      {[], [line | tail]} -> {[line], tail}
+      {line, tail} -> {line, tail}
+    end
+  end
+
+  # When `:truncate` is set, stop once the next line would fall outside the box and
+  # end the last visible line with an ellipsis. `:stop` means this line itself does
+  # not fit, so nothing further is drawn.
+  defp prepare_truncated_line(line, tail, width, height, opts, page) do
+    cond do
+      not Keyword.get(opts, :truncate, false) ->
+        {:draw, line, tail}
+
+      line == [] || not line_fits?(line, height, opts, page) ->
+        :stop
+
+      tail != [] && not remainder_fits?(tail, width, height, line, opts, page) ->
+        {:draw, append_ellipsis(line, width), []}
+
+      true ->
+        {:draw, line, tail}
+    end
+  end
+
+  defp line_fits?(line, height, opts, page) do
+    line_box_height(line, opts, page) <= height
+  end
+
+  defp remainder_fits?([{:line, next} | _], _width, height, line, opts, page) do
+    line_box_height(next, opts, page) <= height - line_box_height(line, opts, page)
+  end
+
+  defp remainder_fits?(chunks, width, height, line, opts, page) do
+    {next, _tail} = wrap_next_line(chunks, width)
+    line_box_height(next, opts, page) <= height - line_box_height(line, opts, page)
+  end
+
+  defp line_box_height([], opts, page) do
+    Keyword.get(opts, :leading, page.leading) || page.current_font_size
+  end
+
+  defp line_box_height(line, opts, page) do
+    Keyword.get(opts, :leading, page.leading) ||
+      line |> Enum.map(&Keyword.get(elem(&1, 2), :height)) |> Enum.max()
+  end
+
+  defp append_ellipsis(line, width) do
+    {_text, _chunk_width, opts} = List.last(line)
+    {_, ellipsis_width, _} = ellipsis = ellipsis_chunk(opts)
+    budget = max(width - ellipsis_width, 0)
+
+    kept =
+      line
+      |> take_chunks_within(budget)
+      |> trim_trailing_whitespace()
+
+    kept ++ [ellipsis]
+  end
+
+  defp ellipsis_chunk(opts) do
+    font = opts[:font].module
+    font_size = opts[:font_size]
+    width = Font.text_width(font, @ellipsis, font_size, opts)
+    {@ellipsis, width, opts}
+  end
+
+  defp take_chunks_within(chunks, budget) do
+    {kept, _remaining} =
+      Enum.reduce_while(chunks, {[], budget}, fn {text, width, opts} = chunk, {acc, remaining} ->
+        cond do
+          width <= remaining ->
+            {:cont, {[chunk | acc], remaining - width}}
+
+          remaining > 0 ->
+            partial = fit_text_within(text, remaining, opts)
+
+            if partial == "" do
+              {:halt, {acc, 0}}
+            else
+              {:halt, {[{partial, text_width(partial, opts), opts} | acc], 0}}
+            end
+
+          true ->
+            {:halt, {acc, 0}}
+        end
+      end)
+
+    Enum.reverse(kept)
+  end
+
+  defp fit_text_within(text, budget, opts) do
+    text
+    |> String.graphemes()
+    |> Enum.reduce_while("", fn grapheme, acc ->
+      candidate = acc <> grapheme
+
+      if text_width(candidate, opts) <= budget do
+        {:cont, candidate}
+      else
+        {:halt, acc}
+      end
+    end)
+  end
+
+  defp text_width(text, opts) do
+    Font.text_width(opts[:font].module, text, opts[:font_size], opts)
+  end
+
+  defp trim_trailing_whitespace([]), do: []
+
+  defp trim_trailing_whitespace(chunks) do
+    {text, _width, opts} = List.last(chunks)
+    trimmed = String.trim_trailing(text)
+
+    cond do
+      trimmed == "" ->
+        chunks |> List.delete_at(-1) |> trim_trailing_whitespace()
+
+      trimmed == text ->
+        chunks
+
+      true ->
+        List.replace_at(chunks, -1, {trimmed, text_width(trimmed, opts), opts})
     end
   end
 

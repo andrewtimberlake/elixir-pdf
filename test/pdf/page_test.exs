@@ -453,6 +453,62 @@ defmodule Pdf.PageTest do
         Page.text_wrap!(page, {10, 20}, {200, 10}, "Hello\nworld")
       end
     end
+
+    test "truncate leaves text that fits unchanged", %{page: page} do
+      page = Page.set_font(page, "Helvetica", 10)
+      plain = Page.text_wrap!(page, {10, 20}, {200, 100}, "Hello world")
+      truncated = Page.text_wrap!(page, {10, 20}, {200, 100}, "Hello world", truncate: true)
+
+      assert export(truncated) == export(plain)
+    end
+
+    test "it truncates with an ellipsis when the text does not fit", %{page: page} do
+      page = Page.set_font(page, "Helvetica", 10)
+
+      page = Page.text_wrap!(page, {10, 20}, {200, 10}, "Hello\nworld", truncate: true)
+
+      assert export(page) == """
+             BT
+             /F1 10 Tf
+             10 12.445 Td
+             (Hello#{<<0x85>>}) Tj
+             ET
+             """
+    end
+
+    test "it truncates the last visible line so the ellipsis fits", %{page: page} do
+      page = Page.set_font(page, "Helvetica", 10)
+
+      page =
+        Page.text_wrap!(page, {10, 20}, {30, 10}, "Hello world", truncate: true, leading: 10)
+
+      assert export(page) == """
+             BT
+             /F1 10 Tf
+             10 12.445 Td
+             (Hell#{<<0x85>>}) Tj
+             ET
+             """
+    end
+
+    test "a right-aligned ellipsis stays inside the box", %{page: page} do
+      page = Page.set_font(page, "Helvetica", 10)
+
+      page =
+        Page.text_wrap!(page, {10, 20}, {30, 10}, "Hello world",
+          truncate: true,
+          leading: 10,
+          align: :right
+        )
+
+      assert export(page) == """
+             BT
+             /F1 10 Tf
+             12.78 12.445 Td
+             (Hell#{<<0x85>>}) Tj
+             ET
+             """
+    end
   end
 
   describe "link/3" do
