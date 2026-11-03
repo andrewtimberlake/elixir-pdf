@@ -238,8 +238,9 @@ defmodule Pdf.Document do
 
         {image, document}
 
-      image ->
-        {image, document}
+      image_ref ->
+        document = %{document | current_page: Page.add_image(page, {x, y}, image_ref, opts)}
+        {Image.new(image_ref), document}
     end
   end
 
@@ -270,10 +271,16 @@ defmodule Pdf.Document do
     new_page = Page.new(Keyword.merge(Keyword.merge(doc_opts, opts), fonts: fonts, size: size))
 
     if current_page do
-      %{current_font: font, current_font_size: font_size} = current_page
       pages = [current_page | document.pages]
       document = %{document | current_page: new_page, pages: pages}
-      set_font(document, font.module.name, font_size, [])
+
+      case current_page do
+        %{current_font: nil} ->
+          document
+
+        %{current_font: font, current_font_size: size} ->
+          set_font(document, font.module.name, size, [])
+      end
     else
       %{document | current_page: new_page}
     end

@@ -188,7 +188,7 @@ defmodule Pdf.Page do
           saved: %{}
       }
       |> set_text_leading(Map.get(saved, :leading))
-      |> set_fill_color(Map.get(saved, :fill_color))
+      |> restore_fill_color(Map.get(saved, :fill_color))
       |> push(["ET"])
 
     # Draw collected underlines (reverse to maintain order)
@@ -196,6 +196,14 @@ defmodule Pdf.Page do
   end
 
   defp end_text(page), do: page
+
+  # The cell's q/Q pair restores the graphics state, so the struct has to match it:
+  # otherwise the next cell skips its colour command as already being set.
+  defp restore_fill_color(%{saving_state: true} = page, color) do
+    push(%{page | fill_color: color}, color_command(color, fill_command(color)))
+  end
+
+  defp restore_fill_color(page, color), do: set_fill_color(page, color)
 
   defp draw_underlines(page, []) do
     %{page | underlines: []}
