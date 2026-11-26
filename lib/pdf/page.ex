@@ -10,7 +10,7 @@ defmodule Pdf.Page do
             cursor: 0,
             in_text: false,
             saved: %{},
-            saving_state: false,
+            graphics_stack: [],
             links: [],
             underlines: []
 
@@ -55,17 +55,6 @@ defmodule Pdf.Page do
   def link_to_page(page, {x, y}, {w, h}, page_number) when is_integer(page_number) do
     link = %{x: x, y: y, w: w, h: h, target: {:page, page_number}}
     %{page | links: [link | page.links]}
-  end
-
-  def set_fill_color(%{saved: %{fill_color: color}, fill_color: color} = page, color), do: page
-  def set_fill_color(%{saved: %{fill_color: _color}, fill_color: color} = page, color), do: page
-
-  def set_fill_color(%{saved: %{fill_color: _color}, fill_color: _color2} = page, color) do
-    push(%{page | fill_color: color}, color_command(color, fill_command(color)))
-  end
-
-  def set_fill_color(%{saving_state: true} = page, color) do
-    push(page, color_command(color, fill_command(color)))
   end
 
   def set_fill_color(%{fill_color: color} = page, color), do: page
@@ -854,11 +843,15 @@ defmodule Pdf.Page do
   end
 
   def save_state(page) do
-    push(%{page | saving_state: true}, "q")
+    push(%{page | graphics_stack: [page.fill_color | page.graphics_stack]}, "q")
+  end
+
+  def restore_state(%{graphics_stack: [fill_color | rest]} = page) do
+    push(%{page | fill_color: fill_color, graphics_stack: rest}, "Q")
   end
 
   def restore_state(page) do
-    push(%{page | saving_state: false}, "Q")
+    push(page, "Q")
   end
 
   def size(%{size: size}) do

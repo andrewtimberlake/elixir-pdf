@@ -722,6 +722,33 @@ defmodule Pdf.TableTest do
       assert export(page) =~ "(Hello ?) Tj"
     end
 
+    test "emits the same fill color before each cell's text", %{page: page} do
+      color = {0.4, 0.4, 0.42}
+
+      table =
+        Table.new([
+          Row.new(["Deposit for QUO-0108", "100.00"], color: color)
+        ])
+
+      page = Page.set_font(page, "Helvetica", 12)
+      table = Pdf.Table.prepare(page, table, 300)
+
+      {page, :complete} = Pdf.Table.render(page, {20, 600}, {300, 500}, table)
+
+      blocks =
+        page
+        |> export()
+        |> String.split("BT")
+        |> Enum.drop(1)
+
+      assert length(blocks) == 2
+
+      for block <- blocks do
+        [before_text, _after_text] = String.split(block, "Tj", parts: 2)
+        assert before_text =~ "0.4 0.4 0.42 rg"
+      end
+    end
+
     test "basic table", %{page: page} do
       data = [
         ["Col 1,1", "Col 1,2", "Col 1,3"],
@@ -744,7 +771,6 @@ defmodule Pdf.TableTest do
              /F1 12 Tf
              20 590.934 Td
              (Col 1,1) Tj
-             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -754,7 +780,6 @@ defmodule Pdf.TableTest do
              /F1 12 Tf
              120.0 590.934 Td
              (Col 1,2) Tj
-             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -764,7 +789,6 @@ defmodule Pdf.TableTest do
              /F1 12 Tf
              220.0 590.934 Td
              (Col 1,3) Tj
-             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -774,7 +798,6 @@ defmodule Pdf.TableTest do
              /F1 12 Tf
              20 578.934 Td
              (Col 2,1) Tj
-             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -784,7 +807,6 @@ defmodule Pdf.TableTest do
              /F1 12 Tf
              120.0 578.934 Td
              (Col 2,2) Tj
-             0.0 0.0 0.0 rg
              ET
              Q
              q
@@ -794,7 +816,6 @@ defmodule Pdf.TableTest do
              /F1 12 Tf
              220.0 578.934 Td
              (Col 2,3) Tj
-             0.0 0.0 0.0 rg
              ET
              Q
              """
